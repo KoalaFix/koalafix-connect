@@ -1,0 +1,35 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.koalafix/kalibrate",
+  "title": "Kalibrate",
+  "description": "One memory for every AI tool on your team. Facts show who checked them and when.",
+  "version": "0.1.0",
+  "websiteUrl": "https://HOST",
+  "repository": {
+    "url": "https://github.com/KoalaFix/kalibrate-connect",
+    "source": "github"
+  },
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/KoalaFix/kalibrate-connect/main/plugins/kalibrate/assets/kalibrate-512.png",
+      "mimeType": "image/png",
+      "sizes": ["512x512"]
+    },
+    {
+      "src": "https://raw.githubusercontent.com/KoalaFix/kalibrate-connect/main/plugins/kalibrate/assets/kalibrate-64.png",
+      "mimeType": "image/png",
+      "sizes": ["64x64"]
+    },
+    {
+      "src": "https://raw.githubusercontent.com/KoalaFix/kalibrate-connect/main/plugins/kalibrate/assets/kalibrate.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": ["any"]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://HOST/mcp"
+    }
+  ]
+}

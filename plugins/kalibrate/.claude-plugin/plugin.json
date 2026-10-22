@@ -1,0 +1,19 @@
+{
+  "name": "kalibrate",
+  "displayName": "Kalibrate",
+  "version": "0.1.0",
+  "description": "Shared team memory and work items for Claude Code and the other AI tools your team uses.",
+  "author": {
+    "name": "KoalaFix",
+    "url": "https://HOST"
+  },
+  "homepage": "https://HOST",
+  "repository": "https://github.com/KoalaFix/kalibrate-connect",
+  "license": "LicenseRef-KoalaFix-Proprietary",
+  "keywords": ["memory", "team-memory", "work-items", "agents", "mcp"],
+  "icon": "./assets/kalibrate-512.png",
+  "documentationUrl": "https://HOST/docs",
+  "supportUrl": "https://HOST/support",
+  "privacyPolicyUrl": "https://HOST/privacy",
+  "termsOfServiceUrl": "https://HOST/terms"
+}

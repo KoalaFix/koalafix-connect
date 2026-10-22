@@ -1,0 +1,20 @@
+{
+  "name": "kalibrate-connect",
+  "interface": {
+    "displayName": "Kalibrate"
+  },
+  "plugins": [
+    {
+      "name": "kalibrate",
+      "source": {
+        "source": "local",
+        "path": "./plugins/kalibrate"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

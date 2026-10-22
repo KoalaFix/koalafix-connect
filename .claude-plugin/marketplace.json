@@ -1,0 +1,17 @@
+{
+  "name": "kalibrate-connect",
+  "owner": {
+    "name": "KoalaFix",
+    "url": "https://HOST"
+  },
+  "description": "One memory for every AI tool on your team. Facts show who checked them and when.",
+  "plugins": [
+    {
+      "name": "kalibrate",
+      "source": "./plugins/kalibrate",
+      "description": "Shared team memory and work items for Claude Code and the other AI tools your team uses.",
+      "category": "development",
+      "tags": ["memory", "team", "work-items"]
+    }
+  ]
+}

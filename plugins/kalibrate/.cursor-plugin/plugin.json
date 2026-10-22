@@ -1,0 +1,23 @@
+{
+  "name": "kalibrate",
+  "displayName": "Kalibrate",
+  "version": "0.1.0",
+  "minClientVersions": {
+    "cursor": "3.13.0"
+  },
+  "description": "Shared team memory and work items for Cursor and the other AI tools your team uses.",
+  "author": {
+    "name": "KoalaFix"
+  },
+  "publisher": "KoalaFix",
+  "homepage": "https://HOST",
+  "repository": "https://github.com/KoalaFix/kalibrate-connect",
+  "license": "LicenseRef-KoalaFix-Proprietary",
+  "logo": "assets/kalibrate.svg",
+  "keywords": ["kalibrate", "memory", "team-memory", "work-items", "mcp"],
+  "category": "integrations",
+  "tags": ["memory", "team", "work-items", "mcp"],
+  "mcpServers": "./.mcp.json",
+  "rules": "./rules/",
+  "skills": "./skills/"
+}
