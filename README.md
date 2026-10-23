@@ -14,7 +14,10 @@ MCP server address and the agent instructions. The KoalaFix service itself is no
   destination.
 - Give the agent the KoalaFix session routine: a skill in Claude Code and Codex, an always-applied rule in
   Cursor, and a context file in Gemini CLI.
-- They contain no scripts, no hooks, no tokens and no telemetry, and they run nothing on your machine.
+- The `koalafix` plugin and the Gemini extension contain no scripts, no hooks, no tokens and no telemetry, and they
+  run nothing on your machine.
+- The optional `koalafix-auto` plugin (Claude Code and Cowork) is the one exception: hooks that make team memory
+  automatic. See "Automatic memory" below.
 
 ## Install
 
@@ -54,6 +57,32 @@ gemini extensions install https://github.com/KoalaFix/koalafix-connect
 
 ChatGPT, Claude on the web, desktop and mobile, VS Code, Windsurf, Zed, JetBrains, OpenCode and any other MCP
 client: open the Connect page at https://mcp.koalafix.com for a one-click link or a configuration snippet for your client.
+
+## Automatic memory (Claude Code and Cowork)
+
+With only the `koalafix` plugin, the agent uses team memory when it decides to. The `koalafix-auto` plugin adds hooks
+that do it for the agent:
+
+- the team brief at session start
+- recall on the first real prompt, with a work-in-progress lease started for the task
+- after that, only news: a fact that changed, or a teammate starting overlapping work
+- the lease closed at session end
+
+```text
+/plugin install koalafix-auto@koalafix-connect
+```
+
+The first session after install shows a sign-in link and a code. Approve it in the browser and memory turns on by
+itself; there's no terminal step. Until the server's browser sign-in is live, run `koalafix login --token <token from
+the dashboard>` once instead.
+
+Your credential is saved once for your user (`~/.kalibrate/credentials.json`) and is only ever sent to the server it
+was issued for. In a project that has its own `koalafix init` install, these hooks do nothing, so nothing runs twice.
+
+The hook scripts are the same ones `koalafix init` installs, copied from KoalaFix/kalibrate by
+`node scripts/sync-hooks.mjs <kalibrate checkout>`; `plugins/koalafix-auto/hooks/scripts/SOURCE` records the commit.
+Codex, Cursor and Gemini CLI get the same hooks through `koalafix init` for now, so their listed plugins stay
+hook-free.
 
 ## Sign in
 
@@ -98,6 +127,8 @@ KoalaFix service. See [LICENSE](LICENSE).
 | `.agents/plugins/marketplace.json` | Codex marketplace |
 | `.cursor-plugin/marketplace.json` | Cursor marketplace |
 | `plugins/koalafix/` | The plugin: Claude, Codex and Cursor manifests, `.mcp.json`, skill, Cursor rule, icons |
+| `plugins/koalafix-auto/` | Optional Claude Code plugin: `hooks/hooks.json` and the hook scripts (copied by `scripts/sync-hooks.mjs`) |
+| `scripts/sync-hooks.mjs` | Copies the hook scripts from a KoalaFix/kalibrate checkout |
 | `gemini-extension.json`, `GEMINI.md` | Gemini CLI extension. Both must stay at the repository root: the Gemini CLI extensions gallery only indexes a root `gemini-extension.json` (plus the GitHub topic `gemini-cli-extension`). |
 | `server.json` | Official MCP Registry entry |
 | `ICONS.md` | Every icon the listings need |

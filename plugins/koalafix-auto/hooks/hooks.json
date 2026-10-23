@@ -1,0 +1,50 @@
+{
+  "description": "KoalaFix team memory, automatic: the brief at session start, recall and the WIP lease on the first real prompt (news only after), the open-items line and WIP backstop at each turn's end, and the lease closed at session end. Signs in through the browser on first use. Does nothing in a project that has its own koalafix init install.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/session-start.mjs\" --user",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/prompt.mjs\" --user",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/stop.mjs\" --user",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/session-end.mjs\" --user",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
