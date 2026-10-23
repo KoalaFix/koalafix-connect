@@ -1,10 +1,10 @@
 {
-  "name": "kalibrate",
+  "name": "koalafix",
   "version": "0.1.0",
   "description": "Shared team memory and work items for Gemini CLI and the other AI tools your team uses.",
   "mcpServers": {
-    "kalibrate": {
-      "httpUrl": "https://HOST/mcp"
+    "koalafix": {
+      "httpUrl": "https://mcp.koalafix.com/mcp"
     }
   },
   "contextFileName": "GEMINI.md"

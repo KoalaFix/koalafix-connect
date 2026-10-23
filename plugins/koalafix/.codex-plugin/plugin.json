@@ -1,0 +1,35 @@
+{
+  "name": "koalafix",
+  "version": "0.1.0",
+  "description": "One memory for every AI tool on your team. Facts show who checked them and when.",
+  "author": {
+    "name": "KoalaFix",
+    "url": "https://koalafix.com"
+  },
+  "homepage": "https://koalafix.com",
+  "repository": "https://github.com/KoalaFix/koalafix-connect",
+  "license": "LicenseRef-KoalaFix-Proprietary",
+  "keywords": ["memory", "team-memory", "work-items", "agents"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "KoalaFix",
+    "shortDescription": "Team memory for your AI tools",
+    "longDescription": "KoalaFix is one shared memory for a software team that uses more than one AI tool. ChatGPT, Codex, Claude, Claude Code, Cursor, OpenCode, VS Code and Gemini CLI all connect to the same server, so a note saved from one tool can be recalled from any other.\n\nWhat you can do from ChatGPT or Codex:\n- Recall team memory. Ask before you act. You get a verdict first (clear, stale, conflict or unknown), then the facts, notes and what teammates are working on.\n- Remember a note. Save something worth keeping. Notes are private unless you save them to the team.\n- Verify a fact. Mark that you checked a fact's source and it still holds, or record the new value.\n- Track work. Claim a task before you start. You get a warning if someone is on overlapping work. Finish it, or hand it over.\n- List open items. What is waiting on you or the team, who owns it and how it closes.\n- Settle an item. Retire a note, dismiss an item, pass it to its owner, or undo.\n- Share to the team. Copy one of your private notes to the team, only after you say yes.\n\nEvery fact carries a sticker: who checked it and when. An answer checked ten minutes ago looks different from one nobody has looked at since last month.\n\nWho it's for: software teams of 3 to 15 people where most people use AI agents daily and the team uses two or more different AI tools on the same work. People who don't write code are welcome too. A founder in ChatGPT can read what a developer's agent saved from Codex.\n\nLimitations:\n- You need a KoalaFix account. Sign in with Google or an email and password when you first connect.\n- When two people save different values for the same fact, the second value is refused unless it comes from a more trusted source. Holding both open for a person to decide is not built yet.\n- Track work records what an agent says it is doing and has done. KoalaFix does not check that the work was really done.\n- KoalaFix stores text and links, not files.\n- It refuses notes that look like secrets or keys. Store a pointer to your secret manager instead.\n- It stores only what you and your agents save to it. It does not read your ChatGPT memory or chat history.\n\nIt's early. Tell us where it breaks.",
+    "developerName": "KoalaFix PTY LTD",
+    "category": "Developer Tools",
+    "capabilities": ["Recall team memory", "Remember a note", "Verify a fact", "Track work", "List open items", "Settle an item", "Share to the team"],
+    "websiteURL": "https://koalafix.com",
+    "supportURL": "https://koalafix.com/support",
+    "privacyPolicyURL": "https://koalafix.com/privacy",
+    "termsOfServiceURL": "https://koalafix.com/terms",
+    "defaultPrompt": [
+      "What does my team already know about how we deploy?",
+      "What work items are open for me right now?",
+      "I'm starting on the login bug. Check if anyone else is already on it."
+    ],
+    "brandColor": "#0F2A43",
+    "composerIcon": "./assets/koalafix-64.png",
+    "logo": "./assets/koalafix-512.png"
+  }
+}

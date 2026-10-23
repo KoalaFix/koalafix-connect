@@ -1,5 +1,5 @@
 {
-  "name": "kalibrate-connect",
+  "name": "koalafix-connect",
   "owner": {
     "name": "KoalaFix"
   },
@@ -8,8 +8,8 @@
   },
   "plugins": [
     {
-      "name": "kalibrate",
-      "source": "plugins/kalibrate",
+      "name": "koalafix",
+      "source": "plugins/koalafix",
       "description": "Shared team memory and work items for Cursor and the other AI tools your team uses."
     }
   ]

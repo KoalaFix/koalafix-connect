@@ -1,14 +1,14 @@
 {
-  "name": "kalibrate-connect",
+  "name": "koalafix-connect",
   "interface": {
-    "displayName": "Kalibrate"
+    "displayName": "KoalaFix"
   },
   "plugins": [
     {
-      "name": "kalibrate",
+      "name": "koalafix",
       "source": {
         "source": "local",
-        "path": "./plugins/kalibrate"
+        "path": "./plugins/koalafix"
       },
       "policy": {
         "installation": "AVAILABLE",
