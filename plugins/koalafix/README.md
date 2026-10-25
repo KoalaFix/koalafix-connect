@@ -53,12 +53,12 @@ choose to authenticate.
 - `share` and `settle` only with the user's yes.
 
 Session hooks (a recall brief when a session starts, open items when it stops) are not part of this plugin.
-They are available through the setup on the Connect page at https://mcp.koalafix.com.
+They are available through the connect command on the Integrations page of the KoalaFix dashboard at https://mcp.koalafix.com.
 
 ## Links
 
 - Website: https://koalafix.com
-- Connect page: https://mcp.koalafix.com
+- Dashboard (connect your assistants on its Integrations page): https://mcp.koalafix.com
 - Documentation: https://koalafix.com/docs
 - Privacy policy: https://koalafix.com/privacy
 - Terms of service: https://koalafix.com/terms
