@@ -24,7 +24,7 @@ Codex: `codex plugin marketplace add KoalaFix/koalafix-connect`, then `codex plu
 ## What this plugin adds
 
 - One remote MCP server, `koalafix`, at `https://mcp.koalafix.com/mcp` (streamable HTTP). It gives the agent seven tools:
-  `recall`, `open` and `verify` to read and confirm, and `remember`, `work`, `share` and `settle` to write.
+  `recall` and `open` to read, and `remember`, `verify`, `work`, `share` and `settle` to write.
 - The KoalaFix session routine, as a skill (Claude Code and Codex) and as an always-applied rule (Cursor).
 
 ## What it runs and sends
