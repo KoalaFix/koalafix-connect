@@ -90,22 +90,30 @@ const RULES = [
 ].join(" ");
 
 /**
- * The reason the Stop hook holds the turn with, for a `pickSpace` answer. The person hears in one line what went to the
- * team. Gemini CLI replaces the answer it held with the next one, so there the model gives its answer again.
+ * How the held turn ends. The person hears in one line what went to the team, and nothing at all when nothing did, so
+ * a session that decided nothing ends on its own answer. Gemini CLI replaces the answer it held with the next one, so
+ * there the model always gives its answer again.
  */
+function ending(client) {
+  const told = "one short line telling the person what you saved to the team";
+  if (client === "gemini-cli") {
+    return `If nothing team-relevant was decided, save nothing. Then give the person your previous answer again, with ${told} if you saved any.`;
+  }
+  return `If nothing team-relevant was decided, save nothing and end your turn without writing anything: no reply and no mention of this note. If you saved any, write ${told}, then finish.`;
+}
+
+/** The reason the Stop hook holds the turn with, for a `pickSpace` answer. */
 export function captureReason(choice, client = "claude-code") {
-  const told = "add one short line telling the person what you saved to the team";
-  const again = client === "gemini-cli" ? ` Then give the person your previous answer again, and ${told}.` : ` If you saved any, ${told}; then finish.`;
   const head = "KoalaFix (a hook, once per session): before you finish,";
   if ("space" in choice) {
     const call = `For each one call the koalafix remember tool with kind "decision", lane "team", space "${choice.space}".`;
-    return `${head} ${WHAT}. ${call} ${RULES} If nothing team-relevant was decided, save nothing and say nothing about this note.${again}`;
+    return `${head} ${WHAT}. ${call} ${RULES} ${ending(client)}`;
   }
   const listed = choice.ask.map((slug) => `"${slug}"`).join(", ");
   return [
     `${head} ${WHAT}. The person is in several KoalaFix spaces (${listed}) and none is named for this project, so do not save yet:`,
     "list each decision in one short line and ask the person which space it belongs in; once they answer, call the koalafix remember tool",
-    `with kind "decision", lane "team" and that space. ${RULES} If nothing team-relevant was decided, save nothing and say nothing about this note.${again}`,
+    `with kind "decision", lane "team" and that space. ${RULES} ${ending(client)}`,
   ].join(" ");
 }
 
