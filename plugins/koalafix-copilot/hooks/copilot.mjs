@@ -18,7 +18,9 @@
 // Plain ESM, Node 22 APIs only, no dependencies.
 
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
+import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 
 /** Each Copilot event, the script it runs and how long the script may take (under the hook's timeoutSec). */
@@ -39,6 +41,9 @@ export const CLIENT = "claude-code";
 /** Copilot sends at most a prompt and a transformed copy; anything bigger than this is not a hook payload. */
 const MAX_INPUT = 16 * 1024 * 1024;
 
+/** How long to wait for stdin to end. Copilot CLI closes it at once; a host that leaves it open must not stall a prompt. */
+const STDIN_MS = 1_000;
+
 const SCRIPTS = path.join(path.dirname(fileURLToPath(import.meta.url)), "scripts");
 
 function isRecord(value) {
@@ -48,7 +53,8 @@ function isRecord(value) {
 /** The fields of a Copilot payload the scripts read, under the names they read them by. */
 export function slimInput(input) {
   const slim = {};
-  for (const name of ["sessionId", "cwd", "prompt", "source", "reason", "stop_hook_active"]) {
+  // `session_id` is the VS Code compatible format's name (PascalCase events); the scripts read either.
+  for (const name of ["sessionId", "session_id", "cwd", "prompt", "source", "reason", "stop_hook_active"]) {
     if (input[name] !== undefined) {
       slim[name] = input[name];
     }
@@ -114,9 +120,10 @@ export function copilotOutput(event, input, printed) {
 
 /**
  * Runs the script for `event` on `raw` (Copilot's stdin) and returns `{ stdout, stderr }` for Copilot. Never throws.
- * @param {{ event: string, raw: string, scripts?: string, execPath?: string, ms?: number, env?: NodeJS.ProcessEnv }} options
+ * `spent` is the time this process has already used: Copilot's timeout runs from the spawn, so the script gets the rest.
+ * @param {{ event: string, raw: string, scripts?: string, execPath?: string, ms?: number, spent?: number, env?: NodeJS.ProcessEnv }} options
  */
-export async function runAdapter({ event, raw, scripts = SCRIPTS, execPath = process.execPath, ms, env = process.env }) {
+export async function runAdapter({ event, raw, scripts = SCRIPTS, execPath = process.execPath, ms, spent = 0, env = process.env }) {
   const quiet = { stdout: "{}\n", stderr: "" };
   const spec = Object.hasOwn(EVENTS, event) ? EVENTS[event] : null;
   if (spec === null) {
@@ -132,6 +139,7 @@ export async function runAdapter({ event, raw, scripts = SCRIPTS, execPath = pro
     return { ...quiet, stderr: "koalafix: copilot hook skipped: the hook input was not a JSON object\n" };
   }
   const script = path.join(scripts, `${spec.script}.mjs`);
+  const budget = Math.max(200, Math.round((ms ?? spec.ms) - spent));
   const result = await new Promise((resolve) => {
     let stdout = "";
     let stderr = "";
@@ -152,8 +160,8 @@ export async function runAdapter({ event, raw, scripts = SCRIPTS, execPath = pro
     }
     const timer = setTimeout(() => {
       child.kill();
-      end({ ok: false, stdout, stderr: `${stderr}koalafix: copilot hook skipped: ${spec.script} took longer than ${ms ?? spec.ms} ms\n` });
-    }, ms ?? spec.ms);
+      end({ ok: false, stdout, stderr: `${stderr}koalafix: copilot hook skipped: ${spec.script} took longer than ${budget} ms\n` });
+    }, budget);
     child.stdout.setEncoding("utf8").on("data", (chunk) => (stdout += chunk));
     child.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
     child.on("error", (error) => end({ ok: false, stdout, stderr: `${stderr}koalafix: copilot hook skipped: ${error.message}\n` }));
@@ -165,29 +173,45 @@ export async function runAdapter({ event, raw, scripts = SCRIPTS, execPath = pro
   return { stdout: `${JSON.stringify(output)}\n`, stderr: result.stderr };
 }
 
-/** Reads stdin to the end (or MAX_INPUT bytes), as text. */
+/** Reads stdin to its end, for at most STDIN_MS and MAX_INPUT bytes, as text ("" past the size limit). */
 async function readStdin() {
   const chunks = [];
   let size = 0;
-  try {
-    for await (const chunk of process.stdin) {
-      size += chunk.length;
-      if (size > MAX_INPUT) {
-        return "";
+  let timer;
+  const read = (async () => {
+    try {
+      for await (const chunk of process.stdin) {
+        size += chunk.length;
+        if (size > MAX_INPUT) {
+          return;
+        }
+        chunks.push(chunk);
       }
-      chunks.push(chunk);
+    } catch {
+      // a broken pipe reads as what arrived
     }
-  } catch {
-    return "";
-  }
-  return Buffer.concat(chunks).toString("utf8");
+  })();
+  await Promise.race([read, new Promise((resolve) => (timer = setTimeout(resolve, STDIN_MS)))]);
+  clearTimeout(timer);
+  return size > MAX_INPUT ? "" : Buffer.concat(chunks).toString("utf8");
 }
 
-if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const { stdout, stderr } = await runAdapter({ event: process.argv[2] ?? "", raw: await readStdin() });
-  process.exitCode = 0;
-  if (stderr !== "") {
-    process.stderr.write(stderr);
+/** Whether `argv1` is this file, through any junction or symlink in either path (a linked ~/.copilot, say). */
+export function isEntry(argv1) {
+  try {
+    return argv1 !== undefined && fs.realpathSync(argv1) === fs.realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
   }
-  process.stdout.write(stdout);
+}
+
+if (isEntry(process.argv[1])) {
+  const raw = await readStdin();
+  const { stdout, stderr } = await runAdapter({ event: process.argv[2] ?? "", raw, spent: performance.now() });
+  process.exitCode = 0;
+  process.stdin.destroy();
+  // Exit once both are flushed, so a stdin a host left open cannot keep the process alive.
+  const write = (stream, text) => (text === "" ? Promise.resolve() : new Promise((resolve) => stream.write(text, resolve)));
+  await Promise.all([write(process.stderr, stderr), write(process.stdout, stdout)]);
+  process.exit(0);
 }

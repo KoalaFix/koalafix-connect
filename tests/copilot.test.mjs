@@ -3,21 +3,40 @@
 
 // The Copilot adapter (plugins/koalafix-copilot/hooks/copilot.mjs): what it gives a script, what it prints for each
 // Copilot event, and that every failure prints `{}`. The scripts here are fakes in a temp folder, so nothing reaches
-// a server.   node --test tests/
+// a server.   node --test tests/copilot.test.mjs (scripts/check.mjs runs it too)
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
+import { fileURLToPath } from "node:url";
 import { CLIENT, EVENTS, contextOf, copilotOutput, runAdapter, slimInput } from "../plugins/koalafix-copilot/hooks/copilot.mjs";
+import { COPIED_FILES, COPILOT_SCRIPTS, SCRIPTS, copyProblems, writeCopies } from "../scripts/copies.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ADAPTER = path.join(ROOT, "plugins", "koalafix-copilot", "hooks", "copilot.mjs");
+const temps = [];
+after(() => {
+  for (const dir of temps) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/** A new temp folder, removed when the tests end. */
+function tempDir() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kf-copilot-"));
+  temps.push(dir);
+  return dir;
+}
 
 const SESSION = { sessionId: "s-1", timestamp: 1793001141827, cwd: path.resolve("/work/app") };
 const BRIEF = "KoalaFix team brief (added by a hook)";
 
 /** A temp folder holding one fake script per event, each running `body` (an ESM module text). */
 function fakeScripts(body) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kf-copilot-"));
+  const dir = tempDir();
   for (const { script } of Object.values(EVENTS)) {
     fs.writeFileSync(path.join(dir, `${script}.mjs`), body);
   }
@@ -33,7 +52,7 @@ process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "X", 
 `;
 
 test("every Copilot event maps to a copied script that exists", () => {
-  const scripts = path.resolve("plugins/koalafix-copilot/hooks/scripts");
+  const scripts = path.join(ROOT, COPILOT_SCRIPTS);
   for (const { script } of Object.values(EVENTS)) {
     assert.ok(fs.existsSync(path.join(scripts, `${script}.mjs`)), script);
   }
@@ -111,7 +130,7 @@ test("a script that hangs is stopped and gives {}", async () => {
 });
 
 test("a missing script, an unknown event or input that is not an object gives {}", async () => {
-  const empty = fs.mkdtempSync(path.join(os.tmpdir(), "kf-copilot-"));
+  const empty = tempDir();
   assert.equal((await runAdapter({ event: "sessionStart", raw: JSON.stringify(SESSION), scripts: empty })).stdout, "{}\n");
   assert.equal((await runAdapter({ event: "userPromptSubmitted", raw: JSON.stringify(SESSION), scripts: empty })).stdout, "{}\n");
   assert.equal((await runAdapter({ event: "toString", raw: JSON.stringify(SESSION), scripts: empty })).stdout, "{}\n");
@@ -124,4 +143,74 @@ test("a Node that cannot start gives {}", async () => {
   const result = await runAdapter({ event: "sessionStart", raw: JSON.stringify(SESSION), scripts, execPath: path.join(scripts, "no-such-node") });
   assert.equal(result.stdout, "{}\n");
   assert.match(result.stderr, /copilot hook skipped/);
+});
+
+test("the snake_case session_id of Copilot's VS Code compatible format reaches the script", () => {
+  assert.deepEqual(slimInput({ session_id: "s-2", cwd: "/w", hook_event_name: "SessionEnd" }), { session_id: "s-2", cwd: "/w" });
+});
+
+/** Runs the real entry point as Copilot does: `node <path> <event>` with the payload on stdin. */
+function runEntry(file, event, input) {
+  return spawnSync(process.execPath, [file, event], { input, encoding: "utf8", timeout: 10_000 });
+}
+
+test("the entry point prints {} and exits 0 for an event it does not handle", () => {
+  const run = runEntry(ADAPTER, "userPromptSubmitted", JSON.stringify(SESSION));
+  assert.equal(run.status, 0);
+  assert.equal(run.stdout, "{}\n");
+});
+
+test("the entry point still runs when its folder is reached through a junction or symlink", (t) => {
+  const link = path.join(tempDir(), "linked-hooks");
+  try {
+    fs.symlinkSync(path.dirname(ADAPTER), link, process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    t.skip(`cannot make a link here: ${error.message}`);
+    return;
+  }
+  const run = runEntry(path.join(link, "copilot.mjs"), "userPromptSubmitted", JSON.stringify(SESSION));
+  assert.equal(run.status, 0);
+  assert.equal(run.stdout, "{}\n");
+});
+
+/** A minimal repository tree with the originals the Copilot plugin copies, and the plugin's own files. */
+function fakeRepo() {
+  const root = tempDir();
+  const put = (rel, body) => {
+    fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+    fs.writeFileSync(path.join(root, rel), body);
+  };
+  put(`${SCRIPTS}/prompt.mjs`, "// prompt\n");
+  put(`${SCRIPTS}/SOURCE`, "KoalaFix/kalibrate abc hooks\n");
+  put(`${SCRIPTS}/run.sh`, "#!/bin/sh\n");
+  for (const original of Object.values(COPIED_FILES)) {
+    put(original, `original ${original}\n`);
+  }
+  for (const own of ["plugin.json", "mcp.json", "README.md", "com.github.copilot/hooks/hooks.json", "hooks/copilot.mjs"]) {
+    put(`plugins/koalafix-copilot/${own}`, "{}\n");
+  }
+  return root;
+}
+
+test("writeCopies makes copies that copyProblems accepts, and leaves Codex's run.sh out", () => {
+  const root = fakeRepo();
+  writeCopies(root);
+  assert.deepEqual(copyProblems(root), []);
+  assert.equal(fs.existsSync(path.join(root, COPILOT_SCRIPTS, "run.sh")), false);
+});
+
+test("copyProblems names an edited copy, a missing copy, a stray script and any file the plugin should not ship", () => {
+  const root = fakeRepo();
+  writeCopies(root);
+  fs.appendFileSync(path.join(root, COPILOT_SCRIPTS, "prompt.mjs"), "// edited\n");
+  fs.rmSync(path.join(root, Object.keys(COPIED_FILES)[0]));
+  fs.writeFileSync(path.join(root, COPILOT_SCRIPTS, "extra.mjs"), "");
+  fs.writeFileSync(path.join(root, COPILOT_SCRIPTS, "evil.cjs"), "");
+  fs.writeFileSync(path.join(root, "plugins/koalafix-copilot/hooks/extra.mjs"), "");
+  const problems = copyProblems(root).join("\n");
+  assert.match(problems, /prompt\.mjs differs/);
+  assert.match(problems, /SKILL\.md is missing|LICENSE is missing/);
+  assert.match(problems, /scripts\/extra\.mjs is not in/);
+  assert.match(problems, /evil\.cjs is not a file the Copilot plugin ships/);
+  assert.match(problems, /hooks\/extra\.mjs is not a file the Copilot plugin ships/);
 });

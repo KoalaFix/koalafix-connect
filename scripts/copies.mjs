@@ -3,13 +3,15 @@
 
 // Files the Copilot plugin carries as exact copies. A Copilot plugin installs only its own folder, so it cannot reach
 // koalafix-auto's scripts or the koalafix plugin's skill: scripts/sync-hooks.mjs writes the copies, and
-// scripts/check.mjs fails when one differs from its original by a single byte. Never edit a copy.
+// scripts/check.mjs fails when one differs from its original (line endings aside), or when the plugin holds a file
+// that is not on the list below. Never edit a copy.
 
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** koalafix-auto's copied hook scripts, and the Copilot plugin's copy of them. */
+/** The Copilot plugin, koalafix-auto's copied hook scripts, and the Copilot plugin's copy of them. */
+export const PLUGIN = "plugins/koalafix-copilot";
 export const SCRIPTS = "plugins/koalafix-auto/hooks/scripts";
 export const COPILOT_SCRIPTS = "plugins/koalafix-copilot/hooks/scripts";
 
@@ -22,6 +24,15 @@ export const COPIED_FILES = {
 /** The files of a scripts folder that come from kalibrate (run.sh is this repository's own, for Codex only). */
 export function scriptFiles(dir) {
   return fs.existsSync(dir) ? fs.readdirSync(dir).filter((name) => name.endsWith(".mjs") || name === "SOURCE" || name === "LICENSE-Apache-2.0.txt").sort() : [];
+}
+
+/** Every file under `root`/`dir`, as repository paths with forward slashes. */
+function listFiles(root, dir) {
+  const full = path.join(root, dir);
+  if (!fs.existsSync(full)) {
+    return [];
+  }
+  return fs.readdirSync(full, { withFileTypes: true }).flatMap((entry) => (entry.isDirectory() ? listFiles(root, `${dir}/${entry.name}`) : [`${dir}/${entry.name}`]));
 }
 
 /** Writes every copy from its original under `root`, removing scripts the original no longer has. */
@@ -59,6 +70,14 @@ export function copyProblems(root) {
   }
   for (const name of have.filter((name) => !wanted.includes(name))) {
     problems.push(`${COPILOT_SCRIPTS}/${name} is not in ${SCRIPTS} (run: node scripts/copies.mjs)`);
+  }
+  // Nothing else may ride along in the Copilot plugin: it installs whole onto people's machines.
+  const own = ["plugin.json", "mcp.json", "README.md", "com.github.copilot/hooks/hooks.json", "hooks/copilot.mjs"].map((rel) => `${PLUGIN}/${rel}`);
+  const allowed = new Set([...own, ...Object.keys(COPIED_FILES), ...wanted.map((name) => `${COPILOT_SCRIPTS}/${name}`)]);
+  for (const rel of listFiles(root, PLUGIN)) {
+    if (!allowed.has(rel)) {
+      problems.push(`${rel} is not a file the Copilot plugin ships; remove it, or add it to scripts/copies.mjs on purpose`);
+    }
   }
   for (const [copy, original] of Object.entries(COPIED_FILES)) {
     if (!fs.existsSync(path.join(root, copy))) {

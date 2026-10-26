@@ -10,7 +10,7 @@
     {
       "name": "koalafix-copilot",
       "source": "./plugins/koalafix-copilot",
-      "description": "KoalaFix team memory for GitHub Copilot: the MCP server, the session routine, and hooks for the brief at session start, recall on each prompt and work closed at the end. Hooks need Node.js 22 or later.",
+      "description": "KoalaFix team memory for GitHub Copilot: the MCP server, the session routine, and hooks for the team brief at session start and a recall on each prompt. Hooks need Node.js 22 or later.",
       "version": "0.1.0",
       "category": "development",
       "tags": ["memory", "team", "hooks"]

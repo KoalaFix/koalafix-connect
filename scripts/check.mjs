@@ -12,8 +12,9 @@
 // 4. No file holds a token, a key or a bearer header, and no hook file names a server: the scripts find the
 //    person's server and token at run time, so the bundle carries neither.
 // 5. The listed koalafix plugin stays hook-free, so the OpenAI directory still takes it.
-// 6. The Copilot plugin's copies (scripts, skill, licence) equal their originals byte for byte (scripts/copies.mjs),
-//    its adapter exists, and its manifests name the same version.
+// 6. The Copilot plugin's copies (scripts, skill, licence) equal their originals (scripts/copies.mjs), it ships no
+//    other file, its adapter exists, its marketplace entry matches its name, version and folder, its mcp.json names
+//    exactly the koalafix plugin's server, and the adapter's tests pass.
 // Exits 1 and names each problem.
 
 import { execFileSync } from "node:child_process";
@@ -131,10 +132,31 @@ for (const manifest of [".claude-plugin", ".codex-plugin", ".cursor-plugin"].map
 
 problems.push(...copyProblems(root));
 const copilot = path.join(root, "plugins", "koalafix-copilot");
-const copilotVersion = JSON.parse(read(path.join(copilot, "plugin.json"))).version;
-const copilotListing = JSON.parse(read(path.join(root, ".github", "plugin", "marketplace.json"))).plugins.find((entry) => entry.name === "koalafix-copilot");
-if (copilotListing?.version !== copilotVersion) {
-  problems.push(`.github/plugin/marketplace.json lists koalafix-copilot at ${copilotListing?.version}, but its plugin.json says ${copilotVersion}`);
+const copilotManifest = JSON.parse(read(path.join(copilot, "plugin.json")));
+const copilotListing = JSON.parse(read(path.join(root, ".github", "plugin", "marketplace.json"))).plugins.find((entry) => entry.name === copilotManifest.name);
+if (copilotListing === undefined) {
+  problems.push(`.github/plugin/marketplace.json does not list ${copilotManifest.name}, the name in plugins/koalafix-copilot/plugin.json`);
+} else {
+  if (copilotListing.version !== copilotManifest.version) {
+    problems.push(`.github/plugin/marketplace.json lists ${copilotManifest.name} at ${copilotListing.version}, but its plugin.json says ${copilotManifest.version}`);
+  }
+  if (String(copilotListing.source).replace(/^\.\//, "") !== "plugins/koalafix-copilot") {
+    problems.push(`.github/plugin/marketplace.json points ${copilotManifest.name} at ${copilotListing.source}, not ./plugins/koalafix-copilot`);
+  }
+}
+// The Copilot plugin names the same one server as the koalafix plugin, and nothing else.
+const servers = (file) => JSON.parse(read(file)).mcpServers ?? {};
+const wanted = JSON.stringify(Object.fromEntries(Object.entries(servers(path.join(listed, ".mcp.json"))).map(([name, entry]) => [name, entry.url])));
+const shipped = JSON.stringify(Object.fromEntries(Object.entries(servers(path.join(copilot, "mcp.json"))).map(([name, entry]) => [name, entry.url])));
+if (shipped !== wanted) {
+  problems.push(`plugins/koalafix-copilot/mcp.json names ${shipped}; it must name exactly the koalafix plugin's server, ${wanted}`);
+}
+
+// The Copilot adapter's tests (no network: their scripts are fakes).
+try {
+  execFileSync(process.execPath, ["--test", path.join(root, "tests", "copilot.test.mjs")], { cwd: root, stdio: "pipe" });
+} catch (error) {
+  problems.push(`tests/copilot.test.mjs failed:\n${String(error.stdout ?? "").split("\n").filter((line) => /^not ok|^# fail|✖/.test(line.trim())).join("\n")}`);
 }
 
 if (problems.length > 0) {

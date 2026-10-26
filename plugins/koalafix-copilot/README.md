@@ -9,7 +9,9 @@ brings three things:
   - **Session start:** the team's brief (facts, open items) goes in front of the session.
   - **Each prompt:** one recall about what you asked, added after your prompt where the model reads it. Later
     prompts add only what this session has not been shown. "ok" or "continue" asks the server nothing.
-  - **Stop and session end:** what is open for you, and your work closed when the session ends.
+  - **Stop and session end:** the same stop and session-end scripts as `koalafix-auto`. Today they tidy the
+    session's state and add nothing to the chat. When those scripts hold a turn (for example, to ask the agent to save
+    a decision), Copilot honours it.
   - **First use:** with no KoalaFix credential on the machine, the agent shows you a sign-in link and a code. Approve
     it once in the browser and the hooks turn on by themselves.
 
@@ -73,14 +75,21 @@ use. Both sign-ins use the same KoalaFix account.
   was issued for. They send that server your prompt's text for the recall (up to 2,000 characters, anything shaped
   like a token or key taken out, marked so the server keeps no log of it). They never send the rest of what Copilot
   gives the model (files, the date, attachments).
-- The recall goes after your prompt in the content the model receives, and Copilot keeps it in the session history.
-  The prompt you see in the timeline is unchanged.
+- The recall goes after your prompt in the content the model receives, so the model reads it as part of your
+  message, and Copilot keeps it in the session history. The block says it was added by a hook. The prompt you see in
+  the timeline is unchanged. When Copilot sends several queued messages at once, each gets its own recall.
 - They contain no token. Every hook gives up silently on any problem (no Node, no credential, a server down or slow),
   and a prompt waits under two seconds for the recall even when the server is down (about 0.4 seconds when it is up,
   measured on Windows).
 
 ## Limits
 
+- Tested on Copilot CLI. VS Code and the GitHub Copilot app run the same Copilot hook runtime, according to GitHub's
+  and VS Code's docs. VS Code's hooks are a preview feature.
+- **Session sandbox:** with Copilot CLI's session sandbox on, a plugin hook can read only its own folder, so it cannot
+  read `~/.kalibrate/credentials.json` or write its state there, so the hooks give up quietly and the automatic memory
+  stays off for that session (the MCP tools still work). To allow it, add your `~/.kalibrate` folder to
+  `sandbox.userPolicy` in `~/.copilot/settings.json`. This was read in GitHub's docs, not tested.
 - Copilot drops the output of a `userPromptSubmitted` command hook, so the per-prompt recall uses
   `userPromptTransformed`. If another plugin also rewrites the prompt there, Copilot keeps only the last rewrite.
 - **Copilot cloud agent:** it runs hooks only from files committed to the repository, and its sandbox has no KoalaFix
