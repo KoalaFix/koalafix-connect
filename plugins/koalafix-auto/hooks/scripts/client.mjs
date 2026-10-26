@@ -150,7 +150,7 @@ export function locateHook(args, env = process.env, input = {}) {
 
 /**
  * One folder as a client reported it, as a path this system opens, or null. A `file:` URI becomes a path, and on
- * Windows the editor form `/c:/Users/...` becomes `c:/Users/...` (Node reads the first as absolute, but cannot open it).
+ * Windows the editor form `/c:/work/...` becomes `c:/work/...` (Node reads the first as absolute, but cannot open it).
  * @param {unknown} dir
  * @param {string} platform
  */
