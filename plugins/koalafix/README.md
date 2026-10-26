@@ -49,7 +49,7 @@ choose to authenticate.
 - Verdict clear: go. stale: check the source, then `verify`. conflict: stop and show the user both claims.
   unknown: ask the user.
 - Learned something durable: `remember`. A decision about the team's shared work (code, conventions, process,
-  ownership, handoffs): `remember` it with kind `decision` and lane `team`, in your own words, never quoting the user.
+  ownership, handoffs): `remember` it with kind `decision` and lane `team`, in your own words, never quoting the user (no `user_words`).
   Confirmed a fact still holds: `verify`.
 - When the task is finished: call `work` with action `done`. Call `open` to see what is still open for you.
 - `share` and `settle` only with the user's yes.

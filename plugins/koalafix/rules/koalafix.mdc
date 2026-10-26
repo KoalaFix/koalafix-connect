@@ -14,7 +14,7 @@ This project uses KoalaFix, the team's shared memory, through the `koalafix` MCP
   unknown: ask the user.
 - Learned something durable, or the user decided something (a choice, a rule, a name): `remember` it. A decision
   about the team's shared work (code, conventions, process, ownership, handoffs) goes to lane `team` with kind
-  `decision`, in your own words: never quote the user, and leave out anything personal or secret.
+  `decision`, in your own words: never quote the user (no `user_words`), and leave out anything personal or secret.
   Confirmed a fact still holds: `verify`.
 - When the task is finished: call `work` with action `done`. Call `open` to see what is still open for you.
 - `share` and `settle` only with the user's yes.

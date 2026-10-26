@@ -86,14 +86,16 @@ const RULES = [
   "Write each one in your own words: one or two sentences on what was decided and why.",
   "Never quote the person's messages or copy any prompt text, and do not set user_words.",
   "Leave out anything personal (health, HR, pay, private life) and any secret, token or credential.",
+  "Skip any decision you already saved to the team this session.",
 ].join(" ");
 
 /**
- * The reason the Stop hook holds the turn with, for a `pickSpace` answer. Gemini CLI replaces the answer it held with
- * the next one, so there the model is also told to give its answer again.
+ * The reason the Stop hook holds the turn with, for a `pickSpace` answer. The person hears in one line what went to the
+ * team. Gemini CLI replaces the answer it held with the next one, so there the model gives its answer again.
  */
 export function captureReason(choice, client = "claude-code") {
-  const again = client === "gemini-cli" ? " Then give the person your previous answer again." : " Then finish as you were.";
+  const told = "add one short line telling the person what you saved to the team";
+  const again = client === "gemini-cli" ? ` Then give the person your previous answer again, and ${told}.` : ` If you saved any, ${told}; then finish.`;
   const head = "KoalaFix (a hook, once per session): before you finish,";
   if ("space" in choice) {
     const call = `For each one call the koalafix remember tool with kind "decision", lane "team", space "${choice.space}".`;
