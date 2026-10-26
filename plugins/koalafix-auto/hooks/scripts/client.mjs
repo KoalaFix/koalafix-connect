@@ -228,14 +228,14 @@ export function promptOutput(client, context) {
 
 /**
  * What the Stop hook prints to keep the turn going with a reason: Claude Code and Codex read `decision: "block"`,
- * Cursor's stop hook auto-submits `followup_message`. Null when the client cannot be held (Gemini CLI runs the
- * stop script at SessionEnd) or there is no reason.
+ * Gemini CLI's AfterAgent too (`block` is its alias of `deny`: the reason goes back to the model as a new prompt),
+ * Cursor's stop hook auto-submits `followup_message`. Null when the client cannot be held or there is no reason.
  */
 export function stopBlockOutput(client, reason) {
   if (reason === null) {
     return null;
   }
-  if (client === "claude-code" || client === "codex") {
+  if (client === "claude-code" || client === "codex" || client === "gemini-cli") {
     return `${JSON.stringify({ decision: "block", reason })}
 `;
   }

@@ -81,7 +81,9 @@ keeps the token; no file here holds one. To sign in ahead of time:
   `work` with action `start` naming the task, with its branch, PR or issue as `ref` (or the `paths` you will change) so overlapping work shows up.
 - Verdict clear: go. stale: check the source, then `verify`. conflict: stop and show the user both claims.
   unknown: ask the user.
-- Learned something durable: `remember`. Confirmed a fact still holds: `verify`.
+- Learned something durable: `remember`. A decision about the team's shared work (code, conventions, process,
+  ownership, handoffs): `remember` it with kind `decision` and lane `team`, in your own words, never quoting the user.
+  Confirmed a fact still holds: `verify`.
 - When the task is finished: call `work` with action `done`. Call `open` to see what is still open for you.
 - `share` and `settle` only with the user's yes.
 
@@ -90,11 +92,16 @@ keeps the token; no file here holds one. To sign in ahead of time:
 With only the `koalafix` plugin, the agent uses team memory when it decides to. The hooks make it automatic:
 
 - **Session start:** the team's brief (facts, open items) goes in front of the session.
-- **Each prompt:** one recall about what you asked, in under 1.5 seconds, with the verdict in front of the prompt. On
-  the first real prompt the hook also starts a work-in-progress lease, so teammates see overlapping work. Later
-  prompts add only what this session has not been shown. "ok" or "continue" asks the server nothing.
-- **Stop and session end:** what is open for you (a line in the client's hook log, not in the chat), and the lease
-  closed when the session ends.
+- **Each prompt:** one recall about what you asked, in under 1.5 seconds, with the verdict in front of the prompt.
+  Later prompts add only what this session has not been shown. "ok" or "continue" asks the server nothing. The
+  plugin starts no work-in-progress lease (a project set up with `koalafix init` gets one); your agent can still
+  name its work with the `work` tool.
+- **End of a turn:** once per session, the hook asks your agent to save each decision the session made about the
+  team's shared work (code, conventions, process, ownership, handoffs) to your team with `remember`, in the agent's
+  own words. Never your messages, never anything personal or secret, and nothing at all when nothing was decided.
+  Your teammates' agents then recall those decisions. The hook also writes what is open for you to the client's hook
+  log (not the chat).
+- **Session end:** a lease, if one was started, is closed.
 - **First use:** with no KoalaFix credential on the machine, the session-start hook starts a browser sign-in and
   the agent shows you a link and a code. Approve it once; the hooks turn on by themselves.
 
@@ -103,7 +110,7 @@ With only the `koalafix` plugin, the agent uses team memory when it decides to. 
 | Claude Code, Cowork | `koalafix-auto` plugin | SessionStart, UserPromptSubmit, Stop, SessionEnd |
 | Codex (CLI and desktop) | `koalafix-auto` plugin, after you trust it in `/hooks` | SessionStart, UserPromptSubmit, Stop, SessionEnd |
 | Cursor | `koalafix-auto` plugin (its hooks run from `${CURSOR_PLUGIN_ROOT}`) | sessionStart, beforeSubmitPrompt, stop, sessionEnd |
-| Gemini CLI | this extension | SessionStart, BeforeAgent, SessionEnd |
+| Gemini CLI | this extension | SessionStart, BeforeAgent, AfterAgent, SessionEnd |
 | claude.ai, Claude desktop and mobile chat, ChatGPT | none: these apps run no hooks | the server's instructions and the skill carry the routine |
 | OpenCode | none from here: `koalafix init` writes its compaction plugin and an AGENTS.md block | |
 
@@ -113,17 +120,24 @@ With only the `koalafix` plugin, the agent uses team memory when it decides to. 
 browser sign-in or `koalafix login`) and send it only to the exact server it was issued for. They send that server:
 - your prompt's text for the recall (up to 2,000 characters, with anything shaped like a token or key taken out),
   marked so the server keeps no log of it;
-- the lease's description, built from the project, never from your prompt: "working in <repo> on <branch>", or the
-  folder name, with credential shapes taken out. **Your teammates see it** as your work in progress;
-- the lease's start and end.
+- once per session, a request for the list of your spaces, to pick where the session's decisions go;
+- in a `koalafix init` project only, the lease's description, built from the project, never from your prompt:
+  "working in <repo> on <branch>", or the folder name, with credential shapes taken out. **Your teammates see it** as
+  your work in progress; and the lease's start and end.
+
+The decisions themselves are written by your agent with the `remember` tool, in its words, to your team's space:
+**your teammates see them**. They go to your only space; if you have several, to the one named after the project
+(its repository or folder name); otherwise your agent asks you which space before it saves anything. The hooks make
+no AI call of their own and never send your conversation.
 
 They keep this session's state and a retry queue in `~/.kalibrate/`. No file in this repository holds a token. The
 only address in them is the hosted server, `https://mcp.koalafix.com`, where the first browser sign-in goes.
 
 **They never get in your way.** Every hook gives up silently on any problem: no Node, no credential, a server that is
 down or slow. A prompt waits at most the hook's 1.5 second budget, and no hook blocks a prompt or a tool call. The
-one exception is small: when the server refuses the work lease, the stop hook asks the agent once per session to
-start it, then never again. In a project that has its own `koalafix init` install, the plugin's hooks do nothing, so nothing runs
+exceptions are small: once per session the stop hook asks the agent to save the session's team decisions (one more
+step for the agent, which saves nothing when nothing was decided), and in a `koalafix init` project, when the server
+refuses the work lease, it asks the agent once to start it. In a project that has its own `koalafix init` install, the plugin's hooks do nothing, so nothing runs
 twice.
 
 **Node.js.** Claude Code's native installer, the Codex binary and Cursor do not bring Node with them. Without Node the

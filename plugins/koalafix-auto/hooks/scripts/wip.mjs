@@ -119,6 +119,7 @@ export function readState(key, env = process.env) {
       leases: Number.isInteger(parsed.leases) ? parsed.leases : 0,
       shown: parsed.shown.filter((entry) => typeof entry === "string"),
       nudged: parsed.nudged === true,
+      captured: parsed.captured === true,
     };
   } catch {
     return null;
