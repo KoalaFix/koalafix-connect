@@ -5,23 +5,9 @@
   "description": "One memory for every AI tool on your team. Facts show who checked them and when.",
   "version": "0.1.0",
   "websiteUrl": "https://koalafix.com",
-  "repository": {
-    "url": "https://github.com/KoalaFix/koalafix-connect",
-    "source": "github"
-  },
   "icons": [
     {
-      "src": "https://raw.githubusercontent.com/KoalaFix/koalafix-connect/main/plugins/koalafix/assets/koalafix-512.png",
-      "mimeType": "image/png",
-      "sizes": ["512x512"]
-    },
-    {
-      "src": "https://raw.githubusercontent.com/KoalaFix/koalafix-connect/main/plugins/koalafix/assets/koalafix-64.png",
-      "mimeType": "image/png",
-      "sizes": ["64x64"]
-    },
-    {
-      "src": "https://raw.githubusercontent.com/KoalaFix/koalafix-connect/main/plugins/koalafix/assets/koalafix.svg",
+      "src": "https://mcp.koalafix.com/favicon.svg",
       "mimeType": "image/svg+xml",
       "sizes": ["any"]
     }

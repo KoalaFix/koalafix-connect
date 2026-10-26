@@ -41,7 +41,7 @@ codex plugin add koalafix@koalafix-connect
 ### Cursor
 
 When KoalaFix is listed in the Cursor Marketplace, choose Add to Cursor on its page. Until then, use the
-one-click Cursor button on the Connect page at https://mcp.koalafix.com. A Teams or Enterprise admin can also import this
+Add to Cursor button on the dashboard's Integrations page at https://mcp.koalafix.com. A Teams or Enterprise admin can also import this
 repository as a team marketplace under Dashboard, Plugins & MCPs.
 
 ### Gemini CLI
