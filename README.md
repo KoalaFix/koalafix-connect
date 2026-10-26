@@ -113,8 +113,8 @@ With only the `koalafix` plugin, the agent uses team memory when it decides to. 
 browser sign-in or `koalafix login`) and send it only to the exact server it was issued for. They send that server:
 - your prompt's text for the recall (up to 2,000 characters, with anything shaped like a token or key taken out),
   marked so the server keeps no log of it;
-- the lease's description: the first line of the session's first prompt, at most 80 characters, credentials taken
-  out. **Your teammates see it** as your work in progress;
+- the lease's description, built from the project, never from your prompt: "working in <repo> on <branch>", or the
+  folder name, with credential shapes taken out. **Your teammates see it** as your work in progress;
 - the lease's start and end.
 
 They keep this session's state and a retry queue in `~/.kalibrate/`. No file in this repository holds a token. The
