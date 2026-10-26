@@ -2,7 +2,8 @@
 // Copyright 2026 KoalaFix PTY LTD
 
 // The hook files for every client that lets a plugin or extension run hooks, written from one table so they stay in
-// step with each other and with `koalafix init`: the same four scripts, the same --user mode, the same timeouts.
+// step with each other and with `koalafix init`: the same four scripts, the same --user mode, the same timeouts
+// (Copilot reaches them through a small adapter, plugins/koalafix-copilot/hooks/copilot.mjs).
 //   node scripts/hook-configs.mjs          rewrites the files
 //   node scripts/hook-configs.mjs --check  exits 1 when a file differs from what this table writes
 // Each client starts `node` with no shell between where it can (Claude Code's exec form), or with a command that
@@ -106,12 +107,33 @@ function gemini() {
   };
 }
 
+/**
+ * GitHub Copilot (CLI, the Copilot app, VS Code's Copilot harness): an Agent Plugins 1.0 plugin reads its hooks from
+ * com.github.copilot/hooks/hooks.json. Every event goes through hooks/copilot.mjs, which runs the same scripts and
+ * prints the field Copilot reads. Copilot fills in ${PLUGIN_ROOT} before the shell sees the command, so the line parses
+ * the same in bash and PowerShell (tested on Windows with Copilot CLI 1.0.103). Per-prompt recall rides on
+ * userPromptTransformed: Copilot drops a command userPromptSubmitted hook's output.
+ */
+function copilot() {
+  const hook = (event, timeoutSec) => ({ type: "command", command: `node "\${PLUGIN_ROOT}/hooks/copilot.mjs" ${event}`, timeoutSec });
+  return {
+    version: 1,
+    hooks: {
+      sessionStart: [hook("sessionStart", HOOKS.sessionStart.timeout)],
+      userPromptTransformed: [hook("userPromptTransformed", HOOKS.prompt.timeout)],
+      agentStop: [hook("agentStop", HOOKS.stop.timeout)],
+      sessionEnd: [hook("sessionEnd", HOOKS.sessionEnd.timeout)],
+    },
+  };
+}
+
 /** Every hook file, by its path in this repository. */
 export const HOOK_FILES = {
   "plugins/koalafix-auto/hooks/claude-code.json": claudeCode(),
   "plugins/koalafix-auto/hooks/codex.json": codex(),
   "plugins/koalafix-auto/hooks/cursor.json": cursor(),
   "hooks/hooks.json": gemini(),
+  "plugins/koalafix-copilot/com.github.copilot/hooks/hooks.json": copilot(),
 };
 
 export const text = (value) => `${JSON.stringify(value, null, 2)}\n`;

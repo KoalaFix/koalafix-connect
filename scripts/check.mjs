@@ -12,6 +12,8 @@
 // 4. No file holds a token, a key or a bearer header, and no hook file names a server: the scripts find the
 //    person's server and token at run time, so the bundle carries neither.
 // 5. The listed koalafix plugin stays hook-free, so the OpenAI directory still takes it.
+// 6. The Copilot plugin's copies (scripts, skill, licence) equal their originals byte for byte (scripts/copies.mjs),
+//    its adapter exists, and its manifests name the same version.
 // Exits 1 and names each problem.
 
 import { execFileSync } from "node:child_process";
@@ -19,6 +21,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { copyProblems } from "./copies.mjs";
 import { HOOK_FILES, text } from "./hook-configs.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -59,6 +62,11 @@ for (const [file, value] of Object.entries(HOOK_FILES)) {
   for (const [, name] of body.matchAll(/hooks\/scripts\/([a-z-]+\.(?:mjs|sh))/g)) {
     if (!fs.existsSync(path.join(scripts, name))) {
       problems.push(`${file} runs hooks/scripts/${name}, which is not in plugins/koalafix-auto/hooks/scripts`);
+    }
+  }
+  for (const [, name] of body.matchAll(/\$\{PLUGIN_ROOT\}\/(hooks\/[a-z-]+\.mjs)/g)) {
+    if (!fs.existsSync(path.join(root, "plugins", "koalafix-copilot", name))) {
+      problems.push(`${file} runs ${name}, which is not in plugins/koalafix-copilot`);
     }
   }
   if (/https?:\/\//.test(body)) {
@@ -119,6 +127,14 @@ for (const manifest of [".claude-plugin", ".codex-plugin", ".cursor-plugin"].map
   if (fs.existsSync(manifest) && "hooks" in JSON.parse(read(manifest))) {
     problems.push(`${rel(manifest)} names hooks: the listed plugin must stay hook-free`);
   }
+}
+
+problems.push(...copyProblems(root));
+const copilot = path.join(root, "plugins", "koalafix-copilot");
+const copilotVersion = JSON.parse(read(path.join(copilot, "plugin.json"))).version;
+const copilotListing = JSON.parse(read(path.join(root, ".github", "plugin", "marketplace.json"))).plugins.find((entry) => entry.name === "koalafix-copilot");
+if (copilotListing?.version !== copilotVersion) {
+  problems.push(`.github/plugin/marketplace.json lists koalafix-copilot at ${copilotListing?.version}, but its plugin.json says ${copilotVersion}`);
 }
 
 if (problems.length > 0) {

@@ -15,6 +15,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { writeCopies } from "./copies.mjs";
 import { HOOK_FILES, text } from "./hook-configs.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -52,4 +53,6 @@ for (const [file, value] of Object.entries(HOOK_FILES)) {
   fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
   fs.writeFileSync(path.join(root, file), text(value));
 }
+// The Copilot plugin installs only its own folder, so it carries the same scripts as an exact copy.
+writeCopies(root);
 console.log(`copied ${wanted.length} hook scripts from ${lines[0].split(" ")[1].slice(0, 7)} and rewrote ${Object.keys(HOOK_FILES).length} hook files`);
