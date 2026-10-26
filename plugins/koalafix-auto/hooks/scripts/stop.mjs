@@ -5,9 +5,9 @@
 // - The WIP backstop. When this session had a real prompt (the prompt hook left its state) but holds no live lease,
 //   because the prompt hook could not start one or the lease ended, the hook starts it itself, named after the
 //   project (label.mjs), never after a prompt. A plugin install (`--user`) never gets one. If the server refuses,
-//   it holds the turn once with a reason the model acts on (Claude Code and Codex `decision: "block"`, Cursor
-//   `followup_message`), never while `stop_hook_active` is set and never twice a session. A server it cannot reach
-//   adds nothing.
+//   it holds the turn once with a reason the model acts on (`decision: "block"`), only in a session a person attends
+//   (so never in Cursor or Gemini CLI), never while `stop_hook_active` is set and never twice a session. A server it
+//   cannot reach adds nothing.
 // - The decision capture (capture.mjs), for project and plugin installs alike: it counts the session's finished turns
 //   after a real prompt and, on the first and then whenever CAPTURE_TURNS turns or CAPTURE_MINUTES minutes have passed
 //   since the last capture, holds the turn with a reason that tells the model to save the team decisions not saved
@@ -35,7 +35,7 @@ import { appendSpool } from "./spool.mjs";
 import { backstopReason, leaseKey, leaseLive, readState, sessionIdOf, sessionKey, writeState } from "./wip.mjs";
 import { projectLabel } from "./label.mjs";
 import { attended, captureDue, captureEvery, captureReason, capturing, fetchSpaces, holdable, isSpacesPage, memberSlugs, pickSpace, projectSlugs } from "./capture.mjs";
-import { pickFromTranscript, pickedSpace, rememberPick } from "./spaces.mjs";
+import { pickFromTranscript, pickedSpace, rememberPick, transcriptSize } from "./spaces.mjs";
 
 /** `OpenArgs` (contract tools-io.ts): the caller's own items, one page of ten. */
 const OPEN_ARGS = { for: "me", limit: 10 };
@@ -74,13 +74,17 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
   // After the capture asked which space, the person's pick is the space of the model's next remember call.
   let picked = state === null ? null : pickedSpace(found.root, env);
   if (ended && picked === null && state.asked !== null) {
-    picked = pickFromTranscript(input.transcript_path, state.asked);
+    picked = pickFromTranscript(input.transcript_path, state.asked, state.askedFrom);
     if (picked !== null) {
-      rememberPick(found.root, picked, env);
+      try {
+        rememberPick(found.root, picked, env);
+      } catch {
+        // a pick that cannot be written is learnt again from the transcript next turn
+      }
     }
   }
-  // Started now so the read runs beside the handshake; only on a turn due a capture.
-  const due = ended && capturing(env, args.client, input) && captureDue(state, now, captureEvery(env));
+  // Started now so the read runs beside the handshake; only on a turn due a capture (checked first: cheaper).
+  const due = ended && captureDue(state, now, captureEvery(env)) && capturing(env, args.client, input);
   const spaces = due ? fetchSpaces(target, deadlineAt).catch(() => null) : null;
   const session = afterAgent ? null : await connect(target, deadlineAt);
   if (session !== null && found.user !== true && state !== null && !leaseLive(state)) {
@@ -112,7 +116,10 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
     if (choice !== null && !(ask && state.asked !== null)) {
       holds.push(captureReason(choice, args.client));
     }
-    state = { ...state, covered: state.turns, capturedAt: now, asked: ask && state.asked === null ? choice.ask : state.asked };
+    // The pick is looked for only in what the transcript gains after the ask.
+    const asking = ask && state.asked === null;
+    const askedFrom = asking ? transcriptSize(input.transcript_path) : state.askedFrom;
+    state = { ...state, covered: state.turns, capturedAt: now, asked: asking ? choice.ask : state.asked, askedFrom };
     writeState(key, state, env);
   }
   return session === null ? null : callTool(session, "open", OPEN_ARGS);

@@ -72,7 +72,7 @@ export function memberSlugs(page) {
 
 /**
  * Where the session's decisions go: `{ space }` for the space the person picked for this folder (`picked`, while they
- * are still in it), their only space or the one named after the project, `{ ask }` (the spaces to offer) when there are
+ * are still in it), their only space or the one named after the project, `{ ask }` (every member space, the reason names the first eight) when there are
  * several and none is, null when the person is in no space.
  * @param {string[]} members
  * @param {string[]} slugs
@@ -89,7 +89,7 @@ export function pickSpace(members, slugs, picked = null) {
     return { space: members[0] };
   }
   const named = slugs.find((slug) => members.includes(slug));
-  return named === undefined ? { ask: members.slice(0, MAX_LISTED_SPACES) } : { space: named };
+  return named === undefined ? { ask: members } : { space: named };
 }
 
 /** Whether the client is already continuing the turn because of a stop hook: Claude Code, Codex, Gemini CLI, Cursor. */
@@ -259,7 +259,8 @@ export function captureReason(choice, client = "claude-code", atEnd = false) {
     const call = `For each one call the koalafix remember tool with kind "decision", lane "team", space "${choice.space}".`;
     return `${head} ${WHAT}. ${call} ${RULES} ${ending(client)}`;
   }
-  const listed = choice.ask.map((slug) => `"${slug}"`).join(", ");
+  const more = choice.ask.length - MAX_LISTED_SPACES;
+  const listed = `${choice.ask.slice(0, MAX_LISTED_SPACES).map((slug) => `"${slug}"`).join(", ")}${more > 0 ? ` and ${more} more` : ""}`;
   return [
     `${head} ${WHAT}. The person is in several KoalaFix spaces (${listed}) and none is named for this project, so do not save yet:`,
     "list each decision in one short line and ask the person which space it belongs in (this folder's decisions go there from now on,",

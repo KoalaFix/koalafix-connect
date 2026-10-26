@@ -4,7 +4,7 @@
 // The space a folder's decisions go to, for a person in several spaces none of which is named after the project. The
 // capture asks them once a session (capture.mjs); this file remembers what they picked, per folder, so no later window
 // or session in that folder asks again. The answer is learnt from the session's own transcript: the latest koalafix
-// `remember` call whose space is one the capture offered. It is kept on this machine only, in
+// `remember` call, written after the capture asked, whose space is one of the person's spaces. It is kept on this machine only, in
 // <KALIBRATE_HOME or ~/.kalibrate>/spaces.json, keyed by a hash of the folder, never on the server.
 // Plain ESM, Node 22 APIs only, no dependencies.
 
@@ -16,8 +16,8 @@ import { kalibrateHome } from "./spool.mjs";
 /** How many folders the file remembers; the oldest pick goes first. */
 export const MAX_FOLDERS = 500;
 
-/** How much of the end of a transcript the hook reads for the person's pick. */
-export const TRANSCRIPT_TAIL_BYTES = 1024 * 1024;
+/** The most of a transcript the hook reads for the person's pick: what was written since it asked, up to this. */
+export const TRANSCRIPT_READ_BYTES = 8 * 1024 * 1024;
 
 /** A space slug as the server makes them. */
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
@@ -29,9 +29,23 @@ function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** The file's key for a folder: an opaque hash, so the file names no folder. */
-export function folderKey(root) {
-  return crypto.createHash("sha256").update(path.resolve(root)).digest("hex").slice(0, 32);
+/**
+ * The file's key for a folder: an opaque hash, so the file names no folder. On Windows the path is taken without a
+ * `\\?\` prefix and in lower case, so one folder reached through two clients is one key.
+ */
+export function folderKey(root, platform = process.platform) {
+  const resolved = path.resolve(root);
+  const key = platform === "win32" ? resolved.replace(/^\\\\\?\\/, "").toLowerCase() : resolved;
+  return crypto.createHash("sha256").update(key).digest("hex").slice(0, 32);
+}
+
+/** A transcript's size in bytes now, or 0 when it cannot be read: where the scan for the pick starts. */
+export function transcriptSize(transcriptPath) {
+  try {
+    return typeof transcriptPath === "string" && path.isAbsolute(transcriptPath) ? fs.statSync(transcriptPath).size : 0;
+  } catch {
+    return 0;
+  }
 }
 
 function spacesPath(env) {
@@ -108,11 +122,12 @@ function pickIn(record, offered, depth = 0) {
 }
 
 /**
- * The space the person picked after the capture asked: the space of the latest koalafix `remember` call in the
- * transcript's last TRANSCRIPT_TAIL_BYTES whose space is one of `offered`, or null. Reads Claude Code's and Codex's
- * JSONL transcripts; a line that is not JSON, or a transcript that cannot be read, gives nothing.
+ * The space the person picked after the capture asked: the space of the latest koalafix `remember` call written to the
+ * transcript after byte `from` (its size when the capture asked) whose space is one of `offered`, or null. At most the
+ * last TRANSCRIPT_READ_BYTES are read. Reads Claude Code's and Codex's JSONL transcripts; a line that is not JSON, or
+ * a transcript that cannot be read, gives nothing.
  */
-export function pickFromTranscript(transcriptPath, offered) {
+export function pickFromTranscript(transcriptPath, offered, from = 0) {
   if (typeof transcriptPath !== "string" || !path.isAbsolute(transcriptPath) || offered.length === 0) {
     return null;
   }
@@ -121,7 +136,8 @@ export function pickFromTranscript(transcriptPath, offered) {
   try {
     fd = fs.openSync(transcriptPath, "r");
     const size = fs.fstatSync(fd).size;
-    const start = Math.max(0, size - TRANSCRIPT_TAIL_BYTES);
+    // A transcript smaller than when the hook asked is another file: read it all.
+    const start = Math.max(from <= size ? from : 0, size - TRANSCRIPT_READ_BYTES);
     const buffer = Buffer.alloc(size - start);
     fs.readSync(fd, buffer, 0, buffer.length, start);
     text = buffer.toString("utf8");
@@ -134,6 +150,9 @@ export function pickFromTranscript(transcriptPath, offered) {
   }
   const lines = text.split("\n");
   for (let n = lines.length - 1; n >= 0; n -= 1) {
+    if (!lines[n].includes("remember")) {
+      continue;
+    }
     let record;
     try {
       record = JSON.parse(lines[n]);
