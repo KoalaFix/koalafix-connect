@@ -46,6 +46,8 @@ for (const name of wanted) {
   lines.push(`${createHash("sha256").update(body).digest("hex")}  ${name}`);
 }
 fs.writeFileSync(path.join(to, "SOURCE"), `${lines.join("\n")}\n`);
+// The scripts are Apache-2.0 (their SPDX headers say so), so the licence text travels with them.
+fs.copyFileSync(path.join(path.resolve(checkout), "LICENSE"), path.join(to, "LICENSE-Apache-2.0.txt"));
 for (const [file, value] of Object.entries(HOOK_FILES)) {
   fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
   fs.writeFileSync(path.join(root, file), text(value));

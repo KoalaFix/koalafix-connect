@@ -9,22 +9,26 @@
 # all it prints what the client needs to read "no change" and exits 0: a hook never blocks or breaks a session.
 # It reads nothing and sends nothing itself; stdin passes straight to the script.
 
-hook=$1
-shift 2>/dev/null
-case $hook in
-  session-start | prompt | stop | session-end) ;;
-  *)
-    echo "koalafix: run.sh was given no known hook" >&2
-    exit 0
-    ;;
-esac
-here=$(cd -- "$(dirname -- "$0")" && pwd) || exit 0
-
 quiet() {
   # Codex, Cursor and Gemini CLI read stdout as JSON, so "nothing to add" is {} for them.
   for arg in "$@"; do
     case $arg in codex | cursor | gemini-cli) printf '{}\n' && return ;; esac
   done
+}
+
+hook=${1-}
+[ $# -gt 0 ] && shift
+case $hook in
+  session-start | prompt | stop | session-end) ;;
+  *)
+    echo "koalafix: run.sh was given no known hook" >&2
+    quiet "$@"
+    exit 0
+    ;;
+esac
+here=$(cd -- "$(dirname -- "$0")" && pwd) || {
+  quiet "$@"
+  exit 0
 }
 
 node=$(command -v node 2>/dev/null)
@@ -36,9 +40,23 @@ if [ -z "$node" ]; then
     "$HOME/.local/share/mise/shims/node" \
     "$HOME/.asdf/shims/node" \
     "$HOME/.local/share/fnm/aliases/default/bin/node" \
-    "$HOME/.fnm/aliases/default/bin/node" \
-    "$HOME"/.nvm/versions/node/*/bin/node; do
-    if [ -x "$candidate" ]; then
+    "$HOME/Library/Application Support/fnm/aliases/default/bin/node" \
+    "$HOME/.fnm/aliases/default/bin/node"; do
+    if [ -z "$node" ] && [ -x "$candidate" ]; then
+      node=$candidate
+    fi
+  done
+fi
+if [ -z "$node" ]; then
+  # nvm: the highest major version installed (v9 sorts after v22 as text, so compare the numbers).
+  best=0
+  for candidate in "$HOME"/.nvm/versions/node/v*/bin/node; do
+    [ -x "$candidate" ] || continue
+    major=${candidate#"$HOME"/.nvm/versions/node/v}
+    major=${major%%.*}
+    case $major in '' | *[!0-9]*) continue ;; esac
+    if [ "$major" -gt "$best" ]; then
+      best=$major
       node=$candidate
     fi
   done

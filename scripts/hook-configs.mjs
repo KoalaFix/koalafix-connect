@@ -43,13 +43,17 @@ function claudeCode() {
   };
 }
 
-/** Codex: it fills in ${PLUGIN_ROOT} itself. run.sh on macOS and Linux, node straight away on Windows. */
+/**
+ * Codex: it fills in ${PLUGIN_ROOT} itself (seen in Codex 0.145's hooks/list). run.sh on macOS and Linux, node straight
+ * away on Windows. `|| printf` makes sure a missing file can never end the command with exit 2, which Codex reads as
+ * "block this prompt" (dash exits 2 when sh cannot open the script).
+ */
 function codex() {
   const hook = (key, timeout = HOOKS[key].timeout) => {
     const { script } = HOOKS[key];
     return {
       type: "command",
-      command: `sh "\${PLUGIN_ROOT}/${SCRIPTS}/run.sh" ${script} --user --client codex`,
+      command: `sh "\${PLUGIN_ROOT}/${SCRIPTS}/run.sh" ${script} --user --client codex || printf '{}\\n'`,
       command_windows: `node "\${PLUGIN_ROOT}/${SCRIPTS}/${script}.mjs" --user --client codex`,
       timeout,
     };
@@ -65,11 +69,15 @@ function codex() {
   };
 }
 
-/** Cursor: a plugin's hook paths are relative to the plugin folder (cursor.com/docs/reference/plugins). */
+/**
+ * Cursor: ${CURSOR_PLUGIN_ROOT}, which Cursor documents as the plugin folder. Not a relative path: if Cursor ran plugin
+ * hooks from the workspace, as it does project hooks, `./hooks/...` would run a script the repository ships. If the
+ * variable is not filled in, the path is wrong in every shell and the hook does nothing, which is the safe way to fail.
+ */
 function cursor() {
   const hook = (key) => {
     const { script, timeout } = HOOKS[key];
-    return { command: `node ./${SCRIPTS}/${script}.mjs --user --client cursor`, timeout };
+    return { command: `node "\${CURSOR_PLUGIN_ROOT}/${SCRIPTS}/${script}.mjs" --user --client cursor`, timeout };
   };
   return {
     version: 1,

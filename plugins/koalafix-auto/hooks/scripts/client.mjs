@@ -8,6 +8,7 @@
 
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { userServer } from "./credentials.mjs";
 import { NoCredentialError } from "./device.mjs";
 import { findConfig, hasProjectInstall, resolveTarget, trustedRoot, userFound } from "./project.mjs";
@@ -148,13 +149,45 @@ export function locateHook(args, env = process.env, input = {}) {
 }
 
 /**
- * The folder a client says the session works in, for a `--user` hook: `cwd` (Claude Code, Codex, Gemini CLI), else
- * the first of Cursor's `workspace_roots`, since Cursor sends no `cwd`. Only an absolute path counts; null when none.
- * @param {Record<string, unknown>} input the hook's stdin
+ * One folder as a client reported it, as a path this system opens, or null. A `file:` URI becomes a path, and on
+ * Windows the editor form `/c:/Users/...` becomes `c:/Users/...` (Node reads the first as absolute, but cannot open it).
+ * @param {unknown} dir
+ * @param {string} platform
  */
-export function reportedFolder(input) {
+function folderPath(dir, platform) {
+  if (typeof dir !== "string" || dir === "") {
+    return null;
+  }
+  let candidate = dir;
+  if (candidate.startsWith("file:")) {
+    try {
+      candidate = fileURLToPath(candidate);
+    } catch {
+      return null;
+    }
+  }
+  if (platform === "win32" && /^\/[A-Za-z]:[\\/]/.test(candidate)) {
+    candidate = candidate.slice(1);
+  }
+  return isAbsoluteProject(candidate, platform) ? candidate : null;
+}
+
+/**
+ * The folder a client says the session works in, for a `--user` hook: `cwd` (Claude Code, Codex, Gemini CLI), else
+ * the first of Cursor's `workspace_roots`, since Cursor sends no `cwd`. In a multi-root Cursor workspace only the first
+ * root counts, for state and for standing down. Only an absolute path counts; null when there is none.
+ * @param {Record<string, unknown>} input the hook's stdin
+ * @param {string} [platform]
+ */
+export function reportedFolder(input, platform = process.platform) {
   const roots = Array.isArray(input.workspace_roots) ? input.workspace_roots : [];
-  return [input.cwd, roots[0]].find((dir) => typeof dir === "string" && dir !== "" && path.isAbsolute(dir)) ?? null;
+  for (const dir of [input.cwd, roots[0]]) {
+    const found = folderPath(dir, platform);
+    if (found !== null) {
+      return found;
+    }
+  }
+  return null;
 }
 
 /** `clientInfo` for the server, so core files the call under the right client family. */

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${PLUGIN_ROOT}/hooks/scripts/run.sh\" session-start --user --client codex",
+            "command": "sh \"${PLUGIN_ROOT}/hooks/scripts/run.sh\" session-start --user --client codex || printf '{}\\n'",
             "command_windows": "node \"${PLUGIN_ROOT}/hooks/scripts/session-start.mjs\" --user --client codex",
             "timeout": 10
           }
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${PLUGIN_ROOT}/hooks/scripts/run.sh\" prompt --user --client codex",
+            "command": "sh \"${PLUGIN_ROOT}/hooks/scripts/run.sh\" prompt --user --client codex || printf '{}\\n'",
             "command_windows": "node \"${PLUGIN_ROOT}/hooks/scripts/prompt.mjs\" --user --client codex",
             "timeout": 5
           }
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${PLUGIN_ROOT}/hooks/scripts/run.sh\" stop --user --client codex",
+            "command": "sh \"${PLUGIN_ROOT}/hooks/scripts/run.sh\" stop --user --client codex || printf '{}\\n'",
             "command_windows": "node \"${PLUGIN_ROOT}/hooks/scripts/stop.mjs\" --user --client codex",
             "timeout": 5
           }
@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${PLUGIN_ROOT}/hooks/scripts/run.sh\" session-end --user --client codex",
+            "command": "sh \"${PLUGIN_ROOT}/hooks/scripts/run.sh\" session-end --user --client codex || printf '{}\\n'",
             "command_windows": "node \"${PLUGIN_ROOT}/hooks/scripts/session-end.mjs\" --user --client codex",
             "timeout": 3
           }

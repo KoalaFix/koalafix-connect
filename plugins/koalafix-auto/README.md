@@ -7,7 +7,8 @@ plugin, the agent recalls and records work when it decides to. With this one, ho
 - **Each prompt:** one recall about what you asked, inside 1.5 seconds, with the verdict in front of the prompt. On
   the first real prompt the hook also starts a work-in-progress lease, so a teammate on overlapping work shows up.
   Later prompts add only what the session has not been shown.
-- **Stop and session end:** one line on what is open for you, and the lease closed when the session ends.
+- **Stop and session end:** what is open for you (a line in the client's hook log), and the lease closed when the
+  session ends.
 - **First use:** with no KoalaFix credential on the machine, the agent shows you a sign-in link and a code. Approve
   it once in the browser and the hooks turn on by themselves.
 
@@ -20,18 +21,24 @@ Claude Code (this also installs the `koalafix` plugin):
 /plugin install koalafix-auto@koalafix-connect
 ```
 
-Codex: `codex plugin add koalafix@koalafix-connect` and `codex plugin add koalafix-auto@koalafix-connect`, then run
-`/hooks` once and trust the KoalaFix hooks. Cursor: add both plugins from the KoalaFix marketplace.
+Codex: `codex plugin marketplace add KoalaFix/koalafix-connect`, then `codex plugin add koalafix@koalafix-connect` and
+`codex plugin add koalafix-auto@koalafix-connect`, then run `/hooks` once and trust the KoalaFix hooks. Cursor: add
+both plugins from the Cursor Marketplace once KoalaFix is listed there; until then a Teams or Enterprise admin imports
+this repository as a team marketplace.
 
 ## What it runs and sends
 
 - Four Node.js scripts (Node 22 or later) in `hooks/scripts/`, the same ones `koalafix init` installs. Claude Code
   starts them with no shell between; Codex on macOS and Linux goes through `hooks/scripts/run.sh`, which only finds
-  Node and starts the script. Without Node the hooks do nothing.
+  Node and starts the script. Without Node the hooks do nothing for KoalaFix (a client may show a one-line hook
+  error).
 - They read your own KoalaFix credential from `~/.kalibrate/credentials.json` and send it only to the exact server it
-  was issued for. They send that server your prompt's text for the recall (marked so the server keeps no log of
-  it) and the lease's start and end. They write this session's state and a retry queue under `~/.kalibrate/`.
-- They contain no token and no server address. They never print a token.
+  was issued for. They send that server your prompt's text for the recall (up to 2,000 characters, anything shaped
+  like a token or key taken out, marked so the server keeps no log of it), and the lease: its start, its end and
+  its description, which is the first line of your first prompt (at most 80 characters) and **which your teammates
+  see**. They write this session's state and a retry queue under `~/.kalibrate/`.
+- They contain no token. The only address in them is the hosted server, where the first browser sign-in goes. They
+  never print a token.
 - Every hook gives up silently on any problem (no Node, no credential, a server down or slow), and in a project with
   its own `koalafix init` install they do nothing, so nothing runs twice.
 

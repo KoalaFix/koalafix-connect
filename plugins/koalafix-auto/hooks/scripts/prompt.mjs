@@ -21,7 +21,7 @@ import { BUDGETS, IDEMPOTENCY_META, UNLOGGED_META, budgetFrom, callTool, connect
 import { readHookInput } from "./project.mjs";
 import { locateHook, parseHookArgs, promptOutput } from "./client.mjs";
 import { NoCredentialError, signInStep } from "./device.mjs";
-import { firstBlock, isTrivial, leaseKey, leaseLive, newsBlock, promptOf, readState, restartedLine, sessionIdOf, sessionKey, whatOf, writeState } from "./wip.mjs";
+import { firstBlock, isTrivial, recallQuery, leaseKey, leaseLive, newsBlock, promptOf, readState, restartedLine, sessionIdOf, sessionKey, whatOf, writeState } from "./wip.mjs";
 
 /** How many results one recall asks for: enough for a first block, few enough to stay inside the budget. */
 const RECALL_LIMIT = 5;
@@ -79,7 +79,7 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.prompt), async (dead
   const key = sessionKey(found.root, sessionId);
   const state = readState(key, env);
   session = connectStateless(target, deadlineAt);
-  const about = prompt.slice(0, 2000);
+  const about = recallQuery(prompt);
   const recall = callTool(session, "recall", { about, limit: RECALL_LIMIT }, { [UNLOGGED_META]: true }).then((result) => result.structured ?? null);
   if (state === null) {
     const what = whatOf(prompt);

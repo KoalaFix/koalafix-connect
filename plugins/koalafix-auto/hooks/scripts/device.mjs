@@ -50,10 +50,20 @@ function writePrivate(file, value) {
   fs.renameSync(temp, file);
 }
 
-/** The server a first sign-in goes to: KALIBRATE_SERVER_URL, else the hosted server. */
+const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * The server a first sign-in goes to: the hosted server, or KALIBRATE_SERVER_URL when it names this machine (a local
+ * test server). Any other override is ignored: a project can set environment variables for its sessions, and the
+ * sign-in saves its server as the person's default, so a planted URL would get every later prompt. Another server
+ * signs in with `koalafix login`, where the person types it.
+ */
 export function signInServer(env = process.env) {
   const given = env.KALIBRATE_SERVER_URL;
-  return typeof given === "string" && originOf(given) !== null ? given : DEFAULT_SERVER_URL;
+  if (typeof given !== "string" || originOf(given) === null) {
+    return DEFAULT_SERVER_URL;
+  }
+  return LOOPBACK.has(new URL(given).hostname) || originOf(given) === originOf(DEFAULT_SERVER_URL) ? given : DEFAULT_SERVER_URL;
 }
 
 /** Saves a token as `koalafix login` does: for its origin, as the default, keeping other servers' entries. */

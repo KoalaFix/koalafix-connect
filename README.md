@@ -93,7 +93,8 @@ With only the `koalafix` plugin, the agent uses team memory when it decides to. 
 - **Each prompt:** one recall about what you asked, in under 1.5 seconds, with the verdict in front of the prompt. On
   the first real prompt the hook also starts a work-in-progress lease, so teammates see overlapping work. Later
   prompts add only what this session has not been shown. "ok" or "continue" asks the server nothing.
-- **Stop and session end:** a line saying what is open for you, and the lease closed when the session ends.
+- **Stop and session end:** what is open for you (a line in the client's hook log, not in the chat), and the lease
+  closed when the session ends.
 - **First use:** with no KoalaFix credential on the machine, the session-start hook starts a browser sign-in and
   the agent shows you a link and a code. Approve it once; the hooks turn on by themselves.
 
@@ -101,7 +102,7 @@ With only the `koalafix` plugin, the agent uses team memory when it decides to. 
 |---|---|---|
 | Claude Code, Cowork | `koalafix-auto` plugin | SessionStart, UserPromptSubmit, Stop, SessionEnd |
 | Codex (CLI and desktop) | `koalafix-auto` plugin, after you trust it in `/hooks` | SessionStart, UserPromptSubmit, Stop, SessionEnd |
-| Cursor | `koalafix-auto` plugin | sessionStart, beforeSubmitPrompt, stop, sessionEnd |
+| Cursor | `koalafix-auto` plugin (its hooks run from `${CURSOR_PLUGIN_ROOT}`) | sessionStart, beforeSubmitPrompt, stop, sessionEnd |
 | Gemini CLI | this extension | SessionStart, BeforeAgent, SessionEnd |
 | claude.ai, Claude desktop and mobile chat, ChatGPT | none: these apps run no hooks | the server's instructions and the skill carry the routine |
 | OpenCode | none from here: `koalafix init` writes its compaction plugin and an AGENTS.md block | |
@@ -109,10 +110,15 @@ With only the `koalafix` plugin, the agent uses team memory when it decides to. 
 **What they run and send.** The hooks are Node.js scripts (Node 22 or later) in
 `plugins/koalafix-auto/hooks/scripts/`, the same scripts `koalafix init` installs, copied from KoalaFix's source by
 `scripts/sync-hooks.mjs`. They read your own KoalaFix credential from `~/.kalibrate/credentials.json` (written by the
-browser sign-in or `koalafix login`) and send it only to the exact server it was issued for. They send the server
-your prompt's text for the recall, marked so the server keeps no log of it, and the lease's start and end. They
-keep this session's state and a retry queue in `~/.kalibrate/`. No file in this repository holds a token or a
-server address.
+browser sign-in or `koalafix login`) and send it only to the exact server it was issued for. They send that server:
+- your prompt's text for the recall (up to 2,000 characters, with anything shaped like a token or key taken out),
+  marked so the server keeps no log of it;
+- the lease's description: the first line of the session's first prompt, at most 80 characters, credentials taken
+  out. **Your teammates see it** as your work in progress;
+- the lease's start and end.
+
+They keep this session's state and a retry queue in `~/.kalibrate/`. No file in this repository holds a token. The
+only address in them is the hosted server, `https://mcp.koalafix.com`, where the first browser sign-in goes.
 
 **They never get in your way.** Every hook gives up silently on any problem: no Node, no credential, a server that is
 down or slow. A prompt waits at most the hook's 1.5 second budget, and no hook blocks a prompt or a tool call. The
@@ -121,7 +127,7 @@ start it, then never again. In a project that has its own `koalafix init` instal
 twice.
 
 **Node.js.** Claude Code's native installer, the Codex binary and Cursor do not bring Node with them. Without Node the
-hooks do nothing and the skill, rule or context file still tells the agent the routine. On macOS and Linux, Codex
+hooks do nothing for KoalaFix (a client may show a one-line hook error) and the skill, rule or context file still tells the agent the routine. On macOS and Linux, Codex
 starts the hooks through `run.sh`, which also finds a Node from Homebrew, nvm, Volta, fnm, asdf or mise that a
 desktop app's short PATH misses.
 

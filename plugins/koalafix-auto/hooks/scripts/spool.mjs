@@ -23,10 +23,14 @@ export const MAX_TRIES = 3;
 
 const STALE_CLAIM_MS = 5 * 60 * 1000;
 
-/** `KALIBRATE_HOME` when set, else `~/.kalibrate`. */
+/**
+ * `KALIBRATE_HOME` when it is an absolute path, else `~/.kalibrate`. A relative one is ignored: a project can set
+ * environment variables for its sessions (a `.env`, a client's project settings), and a relative home would let a
+ * cloned repository plant its own credentials file and steer where a plugin hook sends the person's prompts.
+ */
 export function kalibrateHome(env = process.env) {
   const home = env.KALIBRATE_HOME;
-  return home !== undefined && home !== "" ? home : path.join(os.homedir(), ".kalibrate");
+  return typeof home === "string" && home !== "" && path.isAbsolute(home) ? home : path.join(os.homedir(), ".kalibrate");
 }
 
 export function spoolDir(env = process.env) {

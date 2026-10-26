@@ -66,6 +66,18 @@ export function isTrivial(prompt) {
   return words.every((word) => ACK_WORDS.has(word)) || contentWords(text).length === 0;
 }
 
+/** Credential shapes a person might paste into a prompt: KoalaFix and bearer tokens, then common provider keys. */
+const KEY_SHAPES = /\b(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|AKIA[0-9A-Z]{16}|xox[abposr]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{35}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/g;
+
+/**
+ * The prompt as the recall sends it: at most 2,000 characters, with anything shaped like a credential or a private key
+ * taken out. The recall is unlogged, but the text still crosses the network to the server.
+ */
+export function recallQuery(prompt) {
+  const text = redact(String(prompt)).replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g, "<redacted key>");
+  return text.replace(KEY_SHAPES, "<redacted>").slice(0, 2000);
+}
+
 /**
  * The lease's description: the prompt's first non-empty line, with anything shaped like a credential taken out, at
  * most 80 characters. Teammates see it, so it is kept short.
