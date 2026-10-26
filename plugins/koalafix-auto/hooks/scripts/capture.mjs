@@ -97,9 +97,9 @@ const RULES = [
 function ending(client) {
   const told = "one short line telling the person what you saved to the team";
   if (client === "gemini-cli") {
-    return `If nothing team-relevant was decided, save nothing. Then give the person your previous answer again, with ${told} if you saved any.`;
+    return `If nothing team-relevant was decided, or it is already saved, save nothing. Then give the person your previous answer again, with ${told} if you saved any.`;
   }
-  return `If nothing team-relevant was decided, save nothing and end your turn without writing anything: no reply and no mention of this note. If you saved any, write ${told}, then finish.`;
+  return `If you save nothing now (nothing team-relevant was decided, or it is already saved), stop at once and write nothing at all: no reply, no closing line, no offer and no mention of this note. If you saved any, write ${told}, then finish.`;
 }
 
 /** The reason the Stop hook holds the turn with, for a `pickSpace` answer. */
