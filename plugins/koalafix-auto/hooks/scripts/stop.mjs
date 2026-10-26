@@ -3,10 +3,11 @@
 
 // Claude Code Stop hook, run at the end of every turn. Two jobs:
 // - The WIP backstop. When this session had a real prompt (the prompt hook left its state) but holds no live lease,
-//   because the prompt hook could not start one or the lease ended, the hook starts it itself with the description
-//   from the first prompt. If the server refuses, it holds the turn once with a reason the model acts on (Claude Code
-//   and Codex `decision: "block"`, Cursor `followup_message`), never while `stop_hook_active` is set and never twice
-//   a session. A server it cannot reach adds nothing.
+//   because the prompt hook could not start one or the lease ended, the hook starts it itself, named after the
+//   project (label.mjs), never after a prompt. A plugin install (`--user`) never gets one. If the server refuses,
+//   it holds the turn once with a reason the model acts on (Claude Code and Codex `decision: "block"`, Cursor
+//   `followup_message`), never while `stop_hook_active` is set and never twice a session. A server it cannot reach
+//   adds nothing.
 // - Asks the server what is open for the person (`open`, the real tool with its real arguments) and prints one line
 //   on stderr. If the server cannot be reached it appends that call to the spool
 //   (<KALIBRATE_HOME or ~/.kalibrate>/spool/<date>.jsonl, tagged with this project), and the next session-start hook
@@ -22,7 +23,8 @@ import { readHookInput } from "./project.mjs";
 import { locateHook, parseHookArgs, quietOutput, stopBlockOutput } from "./client.mjs";
 import { summarizeOpen } from "./format.mjs";
 import { appendSpool } from "./spool.mjs";
-import { CONTINUED_WHAT, backstopReason, leaseKey, leaseLive, readState, sessionIdOf, sessionKey, writeState } from "./wip.mjs";
+import { backstopReason, leaseKey, leaseLive, readState, sessionIdOf, sessionKey, writeState } from "./wip.mjs";
+import { projectLabel } from "./label.mjs";
 
 /** `OpenArgs` (contract tools-io.ts): the caller's own items, one page of ten. */
 const OPEN_ARGS = { for: "me", limit: 10 };
@@ -46,12 +48,13 @@ const outcome = await runWithBudget(budgetFrom(env, atSessionEnd ? BUDGETS.stopA
   const { found, target } = located;
   project = found.root;
   const session = await connect(target, deadlineAt);
-  const sessionId = atSessionEnd || target.kind !== "http" ? null : sessionIdOf(input);
+  const sessionId = atSessionEnd || target.kind !== "http" || found.user === true ? null : sessionIdOf(input);
   const key = sessionId === null ? null : sessionKey(found.root, sessionId);
   const state = key === null ? null : readState(key, env);
   if (key !== null && state !== null && !leaseLive(state)) {
     const n = state.leases + 1;
-    const work = { action: "start", what: state.what ?? CONTINUED_WHAT, agent: { client: args.client }, idempotency_key: leaseKey(key, n) };
+    const what = projectLabel(found.root);
+    const work = { action: "start", what, agent: { client: args.client }, idempotency_key: leaseKey(key, n) };
     try {
       const started = (await callTool(session, "work", work, { [IDEMPOTENCY_META]: work.idempotency_key })).structured;
       writeState(key, { ...state, lease: started?.lease ?? null, expiresAt: started?.expires_at ?? null, leases: n }, env);
@@ -60,7 +63,7 @@ const outcome = await runWithBudget(budgetFrom(env, atSessionEnd ? BUDGETS.stopA
         throw error;
       }
       if (!state.nudged && input.stop_hook_active !== true) {
-        hold = backstopReason(messageOf(error));
+        hold = backstopReason(messageOf(error), what);
         writeState(key, { ...state, nudged: true }, env);
       }
     }

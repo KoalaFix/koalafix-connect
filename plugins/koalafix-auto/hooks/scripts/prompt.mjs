@@ -5,6 +5,9 @@
 // The hook does the team-memory work itself, so it never depends on the model choosing to:
 // - On the session's first real prompt it calls `recall(about: prompt)` and `work(start)` together, and puts one
 //   block in front of the prompt: the verdict, the lease it started, overlapping work, facts, notes and teammates.
+// - The lease is named after the project (label.mjs: repository and branch, or the folder), never after the prompt:
+//   teammates see the lease, and a prompt can be private. A plugin install (`--user`) runs in any folder, none of
+//   which belongs to a space, so it starts no lease at all; the agent can still name its work with the `work` tool.
 // - On later prompts it calls `recall` again and adds only what this session has not been shown (wip.mjs). Most
 //   prompts add nothing, so the model does not learn to skip the block.
 // - An acknowledgement ("ok", "continue") asks the server nothing. A lease that has ended is started again.
@@ -21,7 +24,8 @@ import { BUDGETS, IDEMPOTENCY_META, UNLOGGED_META, budgetFrom, callTool, connect
 import { readHookInput } from "./project.mjs";
 import { locateHook, parseHookArgs, promptOutput } from "./client.mjs";
 import { NoCredentialError, signInStep } from "./device.mjs";
-import { firstBlock, isTrivial, recallQuery, leaseKey, leaseLive, newsBlock, promptOf, readState, restartedLine, sessionIdOf, sessionKey, whatOf, writeState } from "./wip.mjs";
+import { firstBlock, isTrivial, recallQuery, leaseKey, leaseLive, newsBlock, promptOf, readState, restartedLine, sessionIdOf, sessionKey, writeState } from "./wip.mjs";
+import { projectLabel } from "./label.mjs";
 
 /** How many results one recall asks for: enough for a first block, few enough to stay inside the budget. */
 const RECALL_LIMIT = 5;
@@ -77,19 +81,20 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.prompt), async (dead
     return;
   }
   const key = sessionKey(found.root, sessionId);
+  // Only a project folder `koalafix init` tied to a space gets an automatic lease, named when one is started.
+  const auto = found.user !== true;
   const state = readState(key, env);
   session = connectStateless(target, deadlineAt);
   const about = recallQuery(prompt);
   const recall = callTool(session, "recall", { about, limit: RECALL_LIMIT }, { [UNLOGGED_META]: true }).then((result) => result.structured ?? null);
   if (state === null) {
-    const what = whatOf(prompt);
-    const [memory, work] = await Promise.all([recall, startLease(session, key, 1, what, args.client)]);
+    const [memory, work] = await Promise.all([recall, auto ? startLease(session, key, 1, projectLabel(found.root), args.client) : null]);
     const block = firstBlock(memory, work);
     context = block.text;
-    writeState(key, { lease: work?.lease ?? null, expiresAt: work?.expires_at ?? null, leases: 1, shown: block.shown, what, nudged: false }, env);
+    writeState(key, { lease: work?.lease ?? null, expiresAt: work?.expires_at ?? null, leases: 1, shown: block.shown, nudged: false }, env);
     return;
   }
-  const restart = leaseLive(state) ? null : startLease(session, key, state.leases + 1, whatOf(prompt), args.client);
+  const restart = !auto || leaseLive(state) ? null : startLease(session, key, state.leases + 1, projectLabel(found.root), args.client);
   const [memory, work] = await Promise.all([recall, restart]);
   const next = work === null ? state : { ...state, lease: work.lease ?? null, expiresAt: work.expires_at ?? null, leases: state.leases + 1 };
   const news = newsBlock(memory, next);

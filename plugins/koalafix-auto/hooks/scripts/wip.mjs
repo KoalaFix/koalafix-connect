@@ -23,9 +23,6 @@ export const MAX_NEW_FACTS = 3;
 /** How many notes the first block shows. */
 export const MAX_NOTES = 3;
 
-/** The lease description: the prompt's first line, this long at most. */
-export const WHAT_MAX = 80;
-
 /** A lease this close to its end is started again rather than relied on. */
 const LEASE_MARGIN_MS = 60_000;
 
@@ -67,7 +64,7 @@ export function isTrivial(prompt) {
 }
 
 /** Credential shapes a person might paste into a prompt: KoalaFix and bearer tokens, then common provider keys. */
-const KEY_SHAPES = /\b(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|AKIA[0-9A-Z]{16}|xox[abposr]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{35}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/g;
+export const KEY_SHAPES = /\b(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|AKIA[0-9A-Z]{16}|xox[abposr]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{35}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/g;
 
 /**
  * The prompt as the recall sends it: at most 2,000 characters, with anything shaped like a credential or a private key
@@ -76,16 +73,6 @@ const KEY_SHAPES = /\b(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|github
 export function recallQuery(prompt) {
   const text = redact(String(prompt)).replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g, "<redacted key>");
   return text.replace(KEY_SHAPES, "<redacted>").slice(0, 2000);
-}
-
-/**
- * The lease's description: the prompt's first non-empty line, with anything shaped like a credential taken out, at
- * most 80 characters. Teammates see it, so it is kept short.
- */
-export function whatOf(prompt) {
-  const line = String(prompt).split(/\r?\n/).find((part) => part.trim() !== "") ?? "";
-  const clean = redact(line).replace(/[A-Za-z0-9_+/=-]{32,}/g, "<redacted>");
-  return str(clean, WHAT_MAX);
 }
 
 /** The session id a client sends its hooks: `session_id` (Claude Code, Codex, Gemini CLI) or `conversation_id` (Cursor). */
@@ -131,7 +118,6 @@ export function readState(key, env = process.env) {
       expiresAt: typeof parsed.expiresAt === "string" ? parsed.expiresAt : null,
       leases: Number.isInteger(parsed.leases) ? parsed.leases : 0,
       shown: parsed.shown.filter((entry) => typeof entry === "string"),
-      what: typeof parsed.what === "string" ? parsed.what : null,
       nudged: parsed.nudged === true,
     };
   } catch {
@@ -303,10 +289,10 @@ export function restartedLine(work) {
 /** What the lease's outcome says when the session ends without the model closing it. */
 export const ENDED_OUTCOME = "session ended (closed by the KoalaFix session-end hook)";
 
-/** The lease description the Stop backstop uses when the session's first prompt left none. */
-export const CONTINUED_WHAT = "work continued in this session";
-
-/** The reason a Stop hook gives when the server refused the lease: the model can act on it once. */
-export function backstopReason(error) {
-  return `KoalaFix could not record this session's work in progress (${error}). Call work(action: "start", what: <one line on what you are doing>) now, then finish.`;
+/**
+ * The reason a Stop hook gives when the server refused the lease: the model can act on it once. It names the
+ * project label to use, so the model does not describe the work in the person's own words.
+ */
+export function backstopReason(error, label) {
+  return `KoalaFix could not record this session's work in progress (${error}). Call work(action: "start", what: ${JSON.stringify(label)}) now, then finish.`;
 }

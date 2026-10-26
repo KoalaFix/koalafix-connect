@@ -39,6 +39,10 @@ const HANDSHAKE_CODES = new Set([-32600, -32601]);
  * `code` is the JSON-RPC error code, or null for a tool's refusal.
  */
 export class ToolError extends Error {
+  /**
+   * @param {string} message
+   * @param {string | number | null} [code] the tool's refusal code (`rate_limited`), or the JSON-RPC error code
+   */
   constructor(message, code = null) {
     super(message);
     this.name = "ToolError";
@@ -427,7 +431,9 @@ export async function callTool(session, name, args, meta) {
   const first = content[0];
   const text = isRecord(first) && first.type === "text" && typeof first.text === "string" ? first.text : "";
   if (isRecord(result) && result.isError === true) {
-    throw new ToolError(`${name} returned an error: ${text.slice(0, 200)}`);
+    // Core's refusal text starts `error: <code>:`; the code lets a caller tell a write limit from a bad call.
+    const code = /^error: ([a-z_]+):/.exec(text)?.[1] ?? null;
+    throw new ToolError(`${name} returned an error: ${text.slice(0, 200)}`, code);
   }
   return { text, structured: isRecord(result) ? result.structuredContent : undefined };
 }
