@@ -35,8 +35,8 @@ this repository as a team marketplace.
 - They read your own KoalaFix credential from `~/.kalibrate/credentials.json` and send it only to the exact server it
   was issued for. They send that server your prompt's text for the recall (up to 2,000 characters, anything shaped
   like a token or key taken out, marked so the server keeps no log of it), and the lease: its start, its end and
-  its description, which is the first line of your first prompt (at most 80 characters) and **which your teammates
-  see**. They write this session's state and a retry queue under `~/.kalibrate/`.
+  its description, which comes from the project ("working in <repo> on <branch>" or the folder name), never from
+  your prompt, and **which your teammates see**. They write this session's state and a retry queue under `~/.kalibrate/`.
 - They contain no token. The only address in them is the hosted server, where the first browser sign-in goes. They
   never print a token.
 - Every hook gives up silently on any problem (no Node, no credential, a server down or slow), and in a project with
