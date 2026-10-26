@@ -1,0 +1,49 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "name": "koalafix-session-start",
+            "command": "node \"${extensionPath}/plugins/koalafix-auto/hooks/scripts/session-start.mjs\" --user --client gemini-cli",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "BeforeAgent": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "name": "koalafix-prompt",
+            "command": "node \"${extensionPath}/plugins/koalafix-auto/hooks/scripts/prompt.mjs\" --user --client gemini-cli",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "name": "koalafix-session-end",
+            "command": "node \"${extensionPath}/plugins/koalafix-auto/hooks/scripts/stop.mjs\" --user --client gemini-cli",
+            "timeout": 5000
+          },
+          {
+            "type": "command",
+            "name": "koalafix-wip-end",
+            "command": "node \"${extensionPath}/plugins/koalafix-auto/hooks/scripts/session-end.mjs\" --user --client gemini-cli",
+            "timeout": 5000
+          }
+        ]
+      }
+    ]
+  }
+}

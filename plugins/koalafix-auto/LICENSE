@@ -1,0 +1,24 @@
+KoalaFix connection files
+Copyright (c) 2026 KoalaFix PTY LTD. All rights reserved.
+
+These files (the plugin and extension manifests, MCP server entries, agent instructions, documentation and
+images in this repository, together the "Files") are made available by KoalaFix PTY LTD ("KoalaFix") for one
+purpose: to install a client and connect it to the KoalaFix service operated by KoalaFix.
+
+1. Permission. You may download, copy and use the Files, unchanged or with changes needed for your own
+   installation, only to install a client and connect it to the KoalaFix service. Plugin, extension and
+   MCP server directories and marketplaces may copy, index and display the Files unchanged in order to offer
+   installation of KoalaFix to their users.
+
+2. Restrictions. You may not sell, sublicense or otherwise distribute the Files except as allowed in
+   section 1, and you may not use them to connect to any service other than KoalaFix.
+
+3. No other rights. No other right or licence is granted, by implication, estoppel or otherwise. This notice
+   does not grant any right to the KoalaFix service, its software or its source code, or to use the
+   KoalaFix or KoalaFix names or logos except to refer to the service. Use of the KoalaFix service is
+   governed by the KoalaFix Terms of Service.
+
+4. No warranty. To the extent permitted by law, the Files are provided "as is", without warranty of any
+   kind, and KoalaFix is not liable for any claim, damages or other liability arising from the Files or
+   their use. Nothing in this notice excludes, restricts or modifies any right or remedy that cannot be
+   excluded under law, including under the Australian Consumer Law.
