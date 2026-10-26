@@ -5,13 +5,15 @@
 // one more capture after it ends, since a SessionEnd hook cannot hold a turn. The session-end hook starts
 // `claude -p --resume <session> --fork-session --no-session-persistence` with the capture's reason, detached, so the
 // session's own conversation is in the model's context and it saves only what it has not saved yet. The fork is never
-// written to disk, and the session's own transcript is left as it was. The run is unattended, so its own hooks hold
-// nothing and start no pass of their own (capture.mjs `capturing`); it is also given KALIBRATE_CAPTURE=off. It can
-// call only the koalafix `remember` and `recall` tools, for at most END_MAX_TURNS turns, on the person's own Claude
-// Code sign-in: one model call, which KALIBRATE_CAPTURE_AT_END=off turns off.
+// written to disk, and the session's own transcript is left as it was. The run gets no built-in tools (`--tools ""`),
+// refuses every tool it is not given (`--permission-mode dontAsk`), so it can call only the koalafix `remember` and
+// `recall` tools whatever the person's own permission rules allow, and runs with every hook off (no brief, recall,
+// lease or capture of its own; KALIBRATE_CAPTURE=off as well). At most END_MAX_TURNS turns, on the person's own
+// Claude Code sign-in: one model call, which KALIBRATE_CAPTURE_AT_END=off turns off.
 // No pass when the session ended by logging out, when every turn was covered, when the person must pick a space (they
-// are gone), or when no `claude` executable can be found (CLAUDE_CODE_EXECPATH, which may also name a `.js` entry
-// point run under Node, else `claude` on PATH; a Windows install that is only an npm `.cmd` shim is not started).
+// are gone), for a session id that is not a UUID, or when no `claude` executable can be found (CLAUDE_CODE_EXECPATH
+// when it names `claude` or a `.js` entry point run under Node, never a bare node; else `claude` on PATH; a Windows
+// install that is only an npm `.cmd` shim is not started).
 // Other clients have no headless resume a hook can start.
 // Plain ESM, Node 22 APIs only, no dependencies.
 
@@ -26,8 +28,14 @@ export const END_TOOLS = ["mcp__plugin_koalafix_koalafix__remember", "mcp__plugi
 /** The most turns the last pass may take. */
 export const END_MAX_TURNS = 8;
 
+/** Only a session id of this shape goes on the command line, so it can never be read as a flag. */
+const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** What CLAUDE_CODE_EXECPATH may name: Claude Code itself, or its JavaScript entry point (never Node itself). */
+const CLAUDE_FILE = /^(?:claude(?:\.exe)?|[^/]+\.(?:c|m)?js)$/i;
+
 function off(value) {
-  return ["off", "0", "false", "no"].includes(String(value ?? "").trim().toLowerCase());
+  return ["off", "0", "false"].includes(String(value ?? "").trim().toLowerCase());
 }
 
 /** Whether the session that just ended is owed a last pass: turns not covered, capturing on, not a logout. */
@@ -41,7 +49,7 @@ export function endPassDue(state, env, input) {
 /** The `claude` executable to start: CLAUDE_CODE_EXECPATH when it is a file, else the first `claude` on PATH, else null. */
 export function claudeExecutable(env, platform = process.platform) {
   const given = env.CLAUDE_CODE_EXECPATH;
-  if (typeof given === "string" && given !== "" && isFile(given)) {
+  if (typeof given === "string" && CLAUDE_FILE.test(path.basename(given)) && isFile(given)) {
     return given;
   }
   const name = platform === "win32" ? "claude.exe" : "claude";
@@ -65,7 +73,24 @@ function isFile(file) {
 
 /** The arguments of the last pass for one session. */
 export function endArgs(reason, sessionId) {
-  return ["-p", reason, "--resume", sessionId, "--fork-session", "--no-session-persistence", "--max-turns", String(END_MAX_TURNS), "--allowedTools", ...END_TOOLS];
+  return [
+    "-p",
+    reason,
+    "--resume",
+    sessionId,
+    "--fork-session",
+    "--no-session-persistence",
+    "--max-turns",
+    String(END_MAX_TURNS),
+    "--settings",
+    JSON.stringify({ disableAllHooks: true }),
+    "--tools",
+    "",
+    "--permission-mode",
+    "dontAsk",
+    "--allowedTools",
+    ...END_TOOLS,
+  ];
 }
 
 /**
@@ -74,6 +99,9 @@ export function endArgs(reason, sessionId) {
  */
 export async function startEndPass({ target, root, cwd, sessionId, env, deadlineAt }) {
   try {
+    if (!SESSION_ID.test(sessionId)) {
+      return "not a session id";
+    }
     const executable = claudeExecutable(env);
     if (executable === null) {
       return "no claude executable";

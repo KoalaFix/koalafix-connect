@@ -39,17 +39,20 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.sessionEnd), async (
   const state = readState(key, env);
   // Claude Code only: the decision capture's last pass over turns no capture covered (capture-end.mjs).
   const cwd = env.CLAUDE_PROJECT_DIR ?? (typeof input.cwd === "string" ? input.cwd : project);
-  const pass = args.client === "claude-code" && target.kind === "http" && endPassDue(state, env, input) ? startEndPass({ target, root: project, cwd, sessionId, env, deadlineAt }) : null;
+  const owed = args.client === "claude-code" && target.kind === "http" && endPassDue(state, env, input);
+  const startPass = () => (owed ? startEndPass({ target, root: project, cwd, sessionId, env, deadlineAt }) : null);
   if (state === null || state.lease === null) {
     if (state !== null) {
       removeState(key, env);
     }
-    await pass;
+    await startPass();
     return "no lease";
   }
   const pending = { action: "done", lease: state.lease, outcome: ENDED_OUTCOME, idempotency_key: `hook-wip-done:${key}:${state.leases}` };
   removeState(key, env);
   appendSpool({ source: "session-end", project, tool: "work", arguments: pending, reason: "queued before the close, in case the session exits first" }, env);
+  // Started once the close is durable, so the pass never delays it.
+  const pass = startPass();
   try {
     const session = await connect(target, deadlineAt);
     await callTool(session, "work", pending, { [IDEMPOTENCY_META]: pending.idempotency_key });
