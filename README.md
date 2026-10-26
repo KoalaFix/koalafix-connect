@@ -96,12 +96,13 @@ With only the `koalafix` plugin, the agent uses team memory when it decides to. 
   Later prompts add only what this session has not been shown. "ok" or "continue" asks the server nothing. The
   plugin starts no work-in-progress lease (a project set up with `koalafix init` gets one); your agent can still
   name its work with the `work` tool.
-- **End of a turn:** once per session, the hook asks your agent to save each decision the session made about the
-  team's shared work (code, conventions, process, ownership, handoffs) to your team with `remember`, in the agent's
-  own words. Never your messages, never anything personal or secret, and nothing at all when nothing was decided.
-  Your teammates' agents then recall those decisions. The hook also writes what is open for you to the client's hook
-  log (not the chat).
-- **Session end:** a lease, if one was started, is closed.
+- **End of the first turn:** once per session, at the end of the first turn that had a real prompt, the hook asks
+  your agent to save each decision made so far about the team's shared work (code, conventions, process, ownership,
+  handoffs) to your team with `remember`, in the agent's own words. Never your messages, never anything personal or
+  secret, and nothing at all when nothing was decided. Your teammates' agents then recall those decisions. Decisions
+  in later turns are saved when your agent follows the routine above (a team decision goes to the team). The hook
+  also writes what is open for you to the client's hook log (not the chat).
+- **Session end:** in a `koalafix init` project, the lease the hooks started is closed.
 - **First use:** with no KoalaFix credential on the machine, the session-start hook starts a browser sign-in and
   the agent shows you a link and a code. Approve it once; the hooks turn on by themselves.
 
@@ -120,15 +121,18 @@ With only the `koalafix` plugin, the agent uses team memory when it decides to. 
 browser sign-in or `koalafix login`) and send it only to the exact server it was issued for. They send that server:
 - your prompt's text for the recall (up to 2,000 characters, with anything shaped like a token or key taken out),
   marked so the server keeps no log of it;
-- once per session, a request for the list of your spaces, to pick where the session's decisions go;
+- once per session, a request for the list of your spaces, to pick where the session's decisions go (if the
+  request fails, it is tried again at the end of the next turn);
 - in a `koalafix init` project only, the lease's description, built from the project, never from your prompt:
   "working in <repo> on <branch>", or the folder name, with credential shapes taken out. **Your teammates see it** as
   your work in progress; and the lease's start and end.
 
 The decisions themselves are written by your agent with the `remember` tool, in its words, to your team's space:
-**your teammates see them**. They go to your only space; if you have several, to the one named after the project
-(its repository or folder name); otherwise your agent asks you which space before it saves anything. The hooks make
-no AI call of their own and never send your conversation.
+**your teammates see them**. They go to your only space, whatever folder you work in; if you have several, to the
+one named after the project (its repository or folder name); otherwise your agent asks you which space before it
+saves anything, and the names of up to eight of your spaces go into its context for that question. What counts as a
+team decision is your agent's judgement, so in a personal project, tell it when a session is not team work. The hooks
+make no AI call of their own and never send the session's transcript.
 
 They keep this session's state and a retry queue in `~/.kalibrate/`. No file in this repository holds a token. The
 only address in them is the hosted server, `https://mcp.koalafix.com`, where the first browser sign-in goes.
@@ -136,7 +140,8 @@ only address in them is the hosted server, `https://mcp.koalafix.com`, where the
 **They never get in your way.** Every hook gives up silently on any problem: no Node, no credential, a server that is
 down or slow. A prompt waits at most the hook's 1.5 second budget, and no hook blocks a prompt or a tool call. The
 exceptions are small: once per session the stop hook asks the agent to save the session's team decisions (one more
-step for the agent, which saves nothing when nothing was decided), and in a `koalafix init` project, when the server
+step for the agent, which saves nothing when nothing was decided; in Gemini CLI the agent also gives its last answer
+again, since Gemini CLI replaces an answer a hook holds), and in a `koalafix init` project, when the server
 refuses the work lease, it asks the agent once to start it. In a project that has its own `koalafix init` install, the plugin's hooks do nothing, so nothing runs
 twice.
 

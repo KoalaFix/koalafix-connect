@@ -30,7 +30,7 @@ import { summarizeOpen } from "./format.mjs";
 import { appendSpool } from "./spool.mjs";
 import { backstopReason, leaseKey, leaseLive, readState, sessionIdOf, sessionKey, writeState } from "./wip.mjs";
 import { projectLabel } from "./label.mjs";
-import { captureReason, continuing, fetchSpaces, memberSlugs, pickSpace, projectSlugs } from "./capture.mjs";
+import { captureReason, fetchSpaces, holdable, isSpacesPage, memberSlugs, pickSpace, projectSlugs } from "./capture.mjs";
 
 /** `OpenArgs` (contract tools-io.ts): the caller's own items, one page of ten. */
 const OPEN_ARGS = { for: "me", limit: 10 };
@@ -39,13 +39,14 @@ const env = process.env;
 const args = parseHookArgs(process.argv.slice(2));
 const gemini = args.client === "gemini-cli";
 let project = null;
+let afterAgent = false;
 const holds = [];
 const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessionEnd : BUDGETS.stop), async (deadlineAt) => {
   const input = await readHookInput(process.stdin, 200);
   if (args.error !== null) {
     throw new Error(args.error);
   }
-  const afterAgent = gemini && input.hook_event_name === "AfterAgent";
+  afterAgent = gemini && input.hook_event_name === "AfterAgent";
   const atSessionEnd = gemini && !afterAgent;
   // The config comes from the folder Claude Code was started in (or `--project`), never from `input.cwd`: the
   // session may have moved into a subfolder that holds a `.kalibrate/` of its own.
@@ -59,7 +60,7 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
   const key = sessionId === null ? null : sessionKey(found.root, sessionId);
   let state = key === null ? null : readState(key, env);
   // Started now so the read runs beside the handshake; only on the one turn that may hold for the capture.
-  const spaces = state !== null && !state.captured && !continuing(input) ? fetchSpaces(target, deadlineAt).catch(() => null) : null;
+  const spaces = state !== null && !state.captured && holdable(input) ? fetchSpaces(target, deadlineAt).catch(() => null) : null;
   const session = afterAgent ? null : await connect(target, deadlineAt);
   if (session !== null && found.user !== true && state !== null && !leaseLive(state)) {
     const n = state.leases + 1;
@@ -80,8 +81,9 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
       }
     }
   }
+  // An answer that is not a SpacesPage counts as a failed read: no hold, and the next turn tries again.
   const page = spaces === null ? null : await spaces;
-  if (page !== null) {
+  if (isSpacesPage(page)) {
     const choice = pickSpace(memberSlugs(page), projectSlugs(found.root));
     if (choice !== null) {
       holds.push(captureReason(choice, args.client));
@@ -97,7 +99,7 @@ if (outcome.ok) {
   notice = outcome.value === null ? "" : `${summarizeOpen(outcome.value, OPEN_ARGS.limit)}\n`;
 } else {
   notice = `koalafix: stop hook skipped: ${messageOf(outcome.error)}\n`;
-  if (project !== null && !(outcome.error instanceof ToolError)) {
+  if (project !== null && !afterAgent && !(outcome.error instanceof ToolError)) {
     try {
       appendSpool({ source: "stop", project, tool: "open", arguments: OPEN_ARGS, reason: messageOf(outcome.error) }, env);
     } catch {
@@ -105,5 +107,6 @@ if (outcome.ok) {
     }
   }
 }
-const hold = outcome.ok && holds.length > 0 ? holds.join("\n\n") : null;
+// Printed even when `open` failed afterwards: the hold's flag is already written, so it would never come again.
+const hold = holds.length > 0 ? holds.join("\n\n") : null;
 finish({ stdout: stopBlockOutput(args.client, hold) ?? quietOutput(args.client), stderr: notice });

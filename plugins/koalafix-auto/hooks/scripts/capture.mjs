@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 KoalaFix PTY LTD and the Kalibrate contributors
 
-// The Stop hook's decision capture (KOA2-286): once per session, the hook holds the turn with a reason that tells the
+// The Stop hook's decision capture: once per session, the hook holds the turn with a reason that tells the
 // model to save each decision the session made about the team's shared work with `remember` (kind decision, lane
 // team), in its own words. The model in the session does the writing: the hook makes no model call and sends no
 // transcript, and the reason never carries the person's prompt. The only request it adds is one read of the person's
@@ -81,6 +81,22 @@ export function continuing(input) {
   return input.stop_hook_active === true || (typeof input.loop_count === "number" && input.loop_count > 0);
 }
 
+/**
+ * Whether this turn's end may be held for the capture: not while the client continues for a stop hook, and not after
+ * a turn Cursor reports as aborted or failed (its `status`), which would spend the session's one capture on it.
+ */
+export function holdable(input) {
+  if (continuing(input)) {
+    return false;
+  }
+  return !isRecord(input) || input.status === undefined || input.status === "completed";
+}
+
+/** Whether a read-API answer is a `SpacesPage`, so an empty member list really means no space. */
+export function isSpacesPage(page) {
+  return isRecord(page) && Array.isArray(page.spaces);
+}
+
 const WHAT = "save each decision this session made about the team's shared work (code, conventions, process, ownership, handoffs), so teammates' assistants know it";
 const RULES = [
   "Write each one in your own words: one or two sentences on what was decided and why.",
@@ -102,6 +118,12 @@ function ending(client) {
   return `If you save nothing now (nothing team-relevant was decided, or it is already saved), stop at once and write nothing at all: no reply, no closing line, no offer and no mention of this note. If you saved any, write ${told}, then finish.`;
 }
 
+/** How the held turn ends when the model must ask which space: the question is its reply, and no decision is no question. */
+function askEnding(client) {
+  const again = client === "gemini-cli" ? " Give the person your previous answer again first, then ask." : "";
+  return `If nothing team-relevant was decided, or it is already saved, save nothing and ask nothing.${again} The question is your whole reply: no other closing line.`;
+}
+
 /** The reason the Stop hook holds the turn with, for a `pickSpace` answer. */
 export function captureReason(choice, client = "claude-code") {
   const head = "KoalaFix (a hook, once per session): before you finish,";
@@ -113,7 +135,7 @@ export function captureReason(choice, client = "claude-code") {
   return [
     `${head} ${WHAT}. The person is in several KoalaFix spaces (${listed}) and none is named for this project, so do not save yet:`,
     "list each decision in one short line and ask the person which space it belongs in; once they answer, call the koalafix remember tool",
-    `with kind "decision", lane "team" and that space. ${RULES} ${ending(client)}`,
+    `with kind "decision", lane "team" and that space. ${RULES} ${askEnding(client)}`,
   ].join(" ");
 }
 
