@@ -12,8 +12,10 @@
 //   after a real prompt and, on the first and then whenever CAPTURE_TURNS turns or CAPTURE_MINUTES minutes have passed
 //   since the last capture, holds the turn with a reason that tells the model to save the team decisions not saved
 //   yet with `remember`, in its own words, to the space capture.mjs picks. Never while the client is already
-//   continuing for a stop hook, and never in a session no person attends (`claude -p`, the Agent SDK), whose printed
-//   answer a held turn would replace. If the person's spaces cannot be read it holds nothing and tries next turn.
+//   continuing for a stop hook, and never in a session no person attends (`claude -p`, the Agent SDK, `codex exec`;
+//   any Cursor or Gemini CLI session, which give no sign), whose printed answer a held turn would replace. If the
+//   person's spaces cannot be read it holds nothing and tries next turn. When it has to ask which space, it asks once
+//   a session, and remembers the person's pick for the folder (spaces.mjs) from the session's transcript.
 // - Asks the server what is open for the person (`open`, the real tool with its real arguments) and prints one line
 //   on stderr. If the server cannot be reached it appends that call to the spool
 //   (<KALIBRATE_HOME or ~/.kalibrate>/spool/<date>.jsonl, tagged with this project), and the next session-start hook
@@ -33,6 +35,7 @@ import { appendSpool } from "./spool.mjs";
 import { backstopReason, leaseKey, leaseLive, readState, sessionIdOf, sessionKey, writeState } from "./wip.mjs";
 import { projectLabel } from "./label.mjs";
 import { attended, captureDue, captureEvery, captureReason, capturing, fetchSpaces, holdable, isSpacesPage, memberSlugs, pickSpace, projectSlugs } from "./capture.mjs";
+import { pickFromTranscript, pickedSpace, rememberPick } from "./spaces.mjs";
 
 /** `OpenArgs` (contract tools-io.ts): the caller's own items, one page of ten. */
 const OPEN_ARGS = { for: "me", limit: 10 };
@@ -68,8 +71,16 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
     state = { ...state, turns: state.turns + 1 };
     writeState(key, state, env);
   }
+  // After the capture asked which space, the person's pick is the space of the model's next remember call.
+  let picked = state === null ? null : pickedSpace(found.root, env);
+  if (ended && picked === null && state.asked !== null) {
+    picked = pickFromTranscript(input.transcript_path, state.asked);
+    if (picked !== null) {
+      rememberPick(found.root, picked, env);
+    }
+  }
   // Started now so the read runs beside the handshake; only on a turn due a capture.
-  const due = ended && capturing(env) && captureDue(state, now, captureEvery(env));
+  const due = ended && capturing(env, args.client, input) && captureDue(state, now, captureEvery(env));
   const spaces = due ? fetchSpaces(target, deadlineAt).catch(() => null) : null;
   const session = afterAgent ? null : await connect(target, deadlineAt);
   if (session !== null && found.user !== true && state !== null && !leaseLive(state)) {
@@ -85,7 +96,7 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
         throw error;
       }
       // Never in a session no person attends: the held turn's line would replace the answer a script reads.
-      if (!state.nudged && input.stop_hook_active !== true && attended(env)) {
+      if (!state.nudged && input.stop_hook_active !== true && attended(env, args.client, input)) {
         holds.push(backstopReason(messageOf(error), what));
         state = { ...state, nudged: true };
         writeState(key, state, env);
@@ -95,11 +106,13 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
   // An answer that is not a SpacesPage counts as a failed read: no hold, and the next turn tries again.
   const page = spaces === null ? null : await spaces;
   if (isSpacesPage(page)) {
-    const choice = pickSpace(memberSlugs(page), projectSlugs(found.root));
-    if (choice !== null) {
+    const choice = pickSpace(memberSlugs(page), projectSlugs(found.root), picked);
+    const ask = choice !== null && "ask" in choice;
+    // Asked once a session: a later window that would ask again holds nothing.
+    if (choice !== null && !(ask && state.asked !== null)) {
       holds.push(captureReason(choice, args.client));
     }
-    state = { ...state, covered: state.turns, capturedAt: now };
+    state = { ...state, covered: state.turns, capturedAt: now, asked: ask && state.asked === null ? choice.ask : state.asked };
     writeState(key, state, env);
   }
   return session === null ? null : callTool(session, "open", OPEN_ARGS);

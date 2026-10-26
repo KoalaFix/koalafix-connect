@@ -122,6 +122,8 @@ export function readState(key, env = process.env) {
       turns: Number.isInteger(parsed.turns) && parsed.turns >= 0 ? parsed.turns : 0,
       covered: Number.isInteger(parsed.covered) && parsed.covered >= 0 ? parsed.covered : 0,
       capturedAt: Number.isFinite(parsed.capturedAt) ? parsed.capturedAt : null,
+      // The spaces the capture offered when it asked the person which one (once a session), else null.
+      asked: Array.isArray(parsed.asked) ? parsed.asked.filter((slug) => typeof slug === "string") : null,
     };
   } catch {
     return null;

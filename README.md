@@ -101,9 +101,12 @@ With only the `koalafix` plugin, the agent uses team memory when it decides to. 
   asks your agent to save each decision made since about the team's shared work (code, conventions, process,
   ownership, handoffs) to your team with `remember`, in the agent's own words, skipping any it already saved. Never
   your messages, never anything personal or secret, and nothing at all when nothing was decided. Your teammates'
-  agents then recall those decisions. Only in a session you are in: a `claude -p` run, an Agent SDK program or a
-  background session is never held, so a script gets its own answer (`KALIBRATE_CAPTURE=always` turns it on there,
-  `off` turns it off everywhere). The hook also writes what is open for you to the client's hook log (not the chat).
+  agents then recall those decisions. Only in a session you are in: a `claude -p` run, an Agent SDK program, a
+  background session, `codex exec` (Codex is held only in its terminal app, IDE extension and desktop app) and every
+  Cursor and Gemini CLI session (their scripted runs look the same to a hook) are never held, so a script gets its own
+  answer (`KALIBRATE_CAPTURE=always` turns it on there, `off` turns it off everywhere). In several spaces with none
+  named after the project, your agent asks you which one once, and the hook remembers your pick for that folder on
+  your machine. The hook also writes what is open for you to the client's hook log (not the chat).
 - **Session end:** in Claude Code, when the session ends with turns that were not covered yet, the hook starts one
   short background run, `claude -p --resume <session> --fork-session --no-session-persistence`, that can only call
   the koalafix `remember` and `recall` tools, so the decisions of the last turns are saved too. It is one AI call on

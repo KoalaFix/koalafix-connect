@@ -8,13 +8,17 @@
 // makes no model call and sends no transcript, and the reason never carries the person's prompt. The only request it
 // adds is one read of the person's spaces (`GET /api/v1/spaces`), on each turn it holds. When a session ends with
 // turns no capture covered, the session-end hook covers them (capture-end.mjs).
-// Only a session a person is attending captures: Claude Code tells its hooks with CLAUDE_CODE_SESSION_ATTENDED, "0"
-// for `claude -p`, the Agent SDK and background sessions, where a held turn would replace the answer a script reads.
-// Which space: the person's only member space; else the member space named after this project (the slug
-// `koalafix init` gives a project's space: the repository's name, or the folder's); else none, and the reason tells
-// the model to ask the person which space before it saves. No member space, nothing to save to: no hold.
+// Only a session a person is attending captures, since a held turn in a scripted run replaces the answer the script
+// reads. Each client says so differently, and only where a real run showed it (see `attended`): Claude Code with
+// CLAUDE_CODE_SESSION_ATTENDED, Codex in its transcript's first line. Cursor and Gemini CLI hand a hook nothing that
+// tells their scripted runs (`cursor-agent -p`, `gemini -p`) from a person's, so they never hold.
+// Which space: the space the person picked for this folder before (spaces.mjs); else their only member space; else
+// the member space named after this project (the slug `koalafix init` gives a project's space: the repository's name,
+// or the folder's); else none, and the reason tells the model to ask the person which space before it saves, once a
+// session. No member space, nothing to save to: no hold.
 // Plain ESM, Node 22 APIs only, no dependencies.
 
+import fs from "node:fs";
 import path from "node:path";
 import { findRepository, remoteName } from "./label.mjs";
 
@@ -67,12 +71,19 @@ export function memberSlugs(page) {
 }
 
 /**
- * Where the session's decisions go: `{ space }` for the person's only space or the one named after the project,
- * `{ ask }` (the spaces to offer) when there are several and none is, null when the person is in no space.
+ * Where the session's decisions go: `{ space }` for the space the person picked for this folder (`picked`, while they
+ * are still in it), their only space or the one named after the project, `{ ask }` (the spaces to offer) when there are
+ * several and none is, null when the person is in no space.
+ * @param {string[]} members
+ * @param {string[]} slugs
+ * @param {string | null} [picked]
  */
-export function pickSpace(members, slugs) {
+export function pickSpace(members, slugs, picked = null) {
   if (members.length === 0) {
     return null;
+  }
+  if (picked !== null && members.includes(picked)) {
+    return { space: picked };
   }
   if (members.length === 1) {
     return { space: members[0] };
@@ -105,28 +116,81 @@ export function isSpacesPage(page) {
   return isRecord(page) && Array.isArray(page.spaces);
 }
 
+/** The Codex session sources a person drives: the terminal UI, and the IDE extension and desktop app. */
+export const CODEX_ATTENDED_SOURCES = ["cli", "vscode"];
+
+/** How much of a Codex transcript the hook reads for its first line (about 18 KB in Codex 0.145). */
+const META_BYTES = 256 * 1024;
+
 /**
- * Whether a person attends this session, so a held turn reaches them rather than replacing the answer a script reads.
- * Claude Code sets CLAUDE_CODE_SESSION_ATTENDED for its hooks itself: "1" for the terminal, IDE and desktop sessions a
- * person drives, "0" for `claude -p`, the Agent SDK, background and child sessions, whatever the parent's environment
- * said. An older Claude Code without it is told apart by CLAUDE_CODE_ENTRYPOINT (`sdk-cli`, `sdk-ts`, `sdk-py`).
- * Other clients set neither and count as attended.
+ * The `source` Codex wrote in the `session_meta` line that opens a session's transcript ("cli" for the terminal UI,
+ * "vscode" for the IDE extension and desktop app, "exec" for `codex exec` and its SDK, "mcp", a sub-agent's object),
+ * or null when there is no such line or it is not a string.
  */
-export function attended(env) {
-  const flag = env.CLAUDE_CODE_SESSION_ATTENDED;
-  if (flag === "0" || flag === "1") {
-    return flag === "1";
+export function codexSource(transcriptPath) {
+  if (typeof transcriptPath !== "string" || !path.isAbsolute(transcriptPath)) {
+    return null;
   }
-  return !String(env.CLAUDE_CODE_ENTRYPOINT ?? "").startsWith("sdk");
+  let fd;
+  try {
+    fd = fs.openSync(transcriptPath, "r");
+    const buffer = Buffer.alloc(META_BYTES);
+    const read = fs.readSync(fd, buffer, 0, META_BYTES, 0);
+    const end = buffer.subarray(0, read).indexOf(10);
+    const first = JSON.parse(buffer.subarray(0, end === -1 ? read : end).toString("utf8"));
+    const source = isRecord(first) && first.type === "session_meta" && isRecord(first.payload) ? first.payload.source : undefined;
+    return typeof source === "string" ? source : null;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) {
+      fs.closeSync(fd);
+    }
+  }
 }
 
-/** Whether this session captures. KALIBRATE_CAPTURE: "off" never, "always" in every session (a scripted run that wants it), else when attended. */
-export function capturing(env) {
+/**
+ * Whether a person attends this session, so a held turn reaches them rather than replacing the answer a script reads.
+ * - Claude Code sets CLAUDE_CODE_SESSION_ATTENDED for its hooks itself: "1" for the terminal, IDE and desktop sessions
+ *   a person drives, "0" for `claude -p`, the Agent SDK, background and child sessions, whatever the parent's
+ *   environment said. An older Claude Code without it is told apart by CLAUDE_CODE_ENTRYPOINT (`sdk-cli`, `sdk-ts`).
+ *   Read for Claude Code only: any other client started from a Claude Code session inherits that session's value.
+ * - Codex gives a `codex exec` hook the same input and environment as the terminal UI's, but its transcript opens
+ *   with the session's source. `codex exec resume` of a terminal session keeps "cli" there, so a session whose turn
+ *   runs with approvals off (`permission_mode` "bypassPermissions", what `codex exec` runs with unless told otherwise)
+ *   never counts, nor does one whose transcript cannot be read.
+ * - Cursor and Gemini CLI: never. Their scripted runs give a hook the same input, environment and pipes as a person's.
+ * @param {Record<string, string | undefined>} env
+ * @param {string} [client]
+ * @param {unknown} [input] the hook's input
+ */
+export function attended(env, client = "claude-code", input = null) {
+  if (client === "claude-code") {
+    const flag = env.CLAUDE_CODE_SESSION_ATTENDED;
+    if (flag === "0" || flag === "1") {
+      return flag === "1";
+    }
+    return !String(env.CLAUDE_CODE_ENTRYPOINT ?? "").startsWith("sdk");
+  }
+  if (client === "codex") {
+    return isRecord(input) && input.permission_mode !== "bypassPermissions" && CODEX_ATTENDED_SOURCES.includes(codexSource(input.transcript_path) ?? "");
+  }
+  return false;
+}
+
+/**
+ * Whether this session captures. KALIBRATE_CAPTURE: "off" never, "always" in every session and every client (a
+ * scripted run that wants it, or a person who accepts the risk in Cursor or Gemini CLI), else when attended.
+ * @param {Record<string, string | undefined>} env
+ * @param {string} [client]
+ * @param {unknown} [input] the hook's input
+ */
+export function capturing(env, client = "claude-code", input = null) {
   const mode = String(env.KALIBRATE_CAPTURE ?? "").trim().toLowerCase();
   if (mode === "off" || mode === "0" || mode === "false") {
     return false;
   }
-  return mode === "always" || attended(env);
+  return mode === "always" || attended(env, client, input);
 }
 
 function positive(text, fallback) {
@@ -198,8 +262,8 @@ export function captureReason(choice, client = "claude-code", atEnd = false) {
   const listed = choice.ask.map((slug) => `"${slug}"`).join(", ");
   return [
     `${head} ${WHAT}. The person is in several KoalaFix spaces (${listed}) and none is named for this project, so do not save yet:`,
-    "list each decision in one short line and ask the person which space it belongs in; once they answer, call the koalafix remember tool",
-    `with kind "decision", lane "team" and that space. ${RULES} ${askEnding(client)}`,
+    "list each decision in one short line and ask the person which space it belongs in (this folder's decisions go there from now on,",
+    `so they are asked once); once they answer, call the koalafix remember tool with kind "decision", lane "team" and that space. ${RULES} ${askEnding(client)}`,
   ].join(" ");
 }
 

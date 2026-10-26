@@ -10,8 +10,8 @@
 // `recall` tools whatever the person's own permission rules allow, and runs with every hook off (no brief, recall,
 // lease or capture of its own; KALIBRATE_CAPTURE=off as well). At most END_MAX_TURNS turns, on the person's own
 // Claude Code sign-in: one model call, which KALIBRATE_CAPTURE_AT_END=off turns off.
-// No pass when the session ended by logging out, when every turn was covered, when the person must pick a space (they
-// are gone), for a session id that is not a UUID, or when no `claude` executable can be found (CLAUDE_CODE_EXECPATH
+// No pass when the session ended by logging out, when every turn was covered, when the person must pick a space and
+// has not picked one for this folder before (they are gone), for a session id that is not a UUID, or when no `claude` executable can be found (CLAUDE_CODE_EXECPATH
 // when it names `claude` or a `.js` entry point run under Node, never a bare node; else `claude` on PATH; a Windows
 // install that is only an npm `.cmd` shim is not started).
 // Other clients have no headless resume a hook can start.
@@ -21,6 +21,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { captureReason, capturing, fetchSpaces, isSpacesPage, memberSlugs, pickSpace, projectSlugs } from "./capture.mjs";
+import { pickedSpace } from "./spaces.mjs";
 
 /** The tools the last pass may call: the plugin's server, then a `koalafix init` project's. */
 export const END_TOOLS = ["mcp__plugin_koalafix_koalafix__remember", "mcp__plugin_koalafix_koalafix__recall", "mcp__koalafix__remember", "mcp__koalafix__recall"];
@@ -107,7 +108,7 @@ export async function startEndPass({ target, root, cwd, sessionId, env, deadline
       return "no claude executable";
     }
     const page = await fetchSpaces(target, deadlineAt);
-    const choice = isSpacesPage(page) ? pickSpace(memberSlugs(page), projectSlugs(root)) : null;
+    const choice = isSpacesPage(page) ? pickSpace(memberSlugs(page), projectSlugs(root), pickedSpace(root, env)) : null;
     if (choice === null || !("space" in choice)) {
       return "no single space";
     }

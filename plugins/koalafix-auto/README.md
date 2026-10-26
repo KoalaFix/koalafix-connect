@@ -12,7 +12,9 @@ plugin, the agent recalls and records work when it decides to. With this one, ho
   about the team's shared work (code, conventions, process, ownership, handoffs) to your team, in its own words,
   skipping any it already saved: never your messages, never anything personal or secret, nothing when nothing was
   decided. Teammates' agents then recall them. Never in a session no one is in (`claude -p`, the Agent SDK,
-  background sessions), so a script's answer stays its own; `KALIBRATE_CAPTURE=always` or `off` changes that. Also
+  background sessions, `codex exec`), nor in Cursor or Gemini CLI, whose scripted runs look the same to a hook, so a
+  script's answer stays its own; `KALIBRATE_CAPTURE=always` or `off` changes that. In several spaces with none named
+  after the project, you are asked which one once, and your pick is remembered for that folder on your machine. Also
   what is open for you (a line in the client's hook log).
 - **Session end (Claude Code):** if the last turns were not covered, one short background
   `claude -p --resume <session> --fork-session --no-session-persistence` run saves their decisions: one AI call on
