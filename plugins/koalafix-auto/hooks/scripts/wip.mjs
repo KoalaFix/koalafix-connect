@@ -119,7 +119,9 @@ export function readState(key, env = process.env) {
       leases: Number.isInteger(parsed.leases) ? parsed.leases : 0,
       shown: parsed.shown.filter((entry) => typeof entry === "string"),
       nudged: parsed.nudged === true,
-      captured: parsed.captured === true,
+      turns: Number.isInteger(parsed.turns) && parsed.turns >= 0 ? parsed.turns : 0,
+      covered: Number.isInteger(parsed.covered) && parsed.covered >= 0 ? parsed.covered : 0,
+      capturedAt: Number.isFinite(parsed.capturedAt) ? parsed.capturedAt : null,
     };
   } catch {
     return null;

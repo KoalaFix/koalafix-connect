@@ -8,10 +8,12 @@
 //   it holds the turn once with a reason the model acts on (Claude Code and Codex `decision: "block"`, Cursor
 //   `followup_message`), never while `stop_hook_active` is set and never twice a session. A server it cannot reach
 //   adds nothing.
-// - The decision capture (capture.mjs), for project and plugin installs alike: on the first turn's end after a real
-//   prompt, it holds the turn once with a reason that tells the model to save the session's team decisions with
-//   `remember`, in its own words, to the space capture.mjs picks. Never while the client is already continuing for a
-//   stop hook, never twice a session. If the person's spaces cannot be read it holds nothing and tries next turn.
+// - The decision capture (capture.mjs), for project and plugin installs alike: it counts the session's finished turns
+//   after a real prompt and, on the first and then whenever CAPTURE_TURNS turns or CAPTURE_MINUTES minutes have passed
+//   since the last capture, holds the turn with a reason that tells the model to save the team decisions not saved
+//   yet with `remember`, in its own words, to the space capture.mjs picks. Never while the client is already
+//   continuing for a stop hook, and never in a session no person attends (`claude -p`, the Agent SDK), whose printed
+//   answer a held turn would replace. If the person's spaces cannot be read it holds nothing and tries next turn.
 // - Asks the server what is open for the person (`open`, the real tool with its real arguments) and prints one line
 //   on stderr. If the server cannot be reached it appends that call to the spool
 //   (<KALIBRATE_HOME or ~/.kalibrate>/spool/<date>.jsonl, tagged with this project), and the next session-start hook
@@ -30,7 +32,7 @@ import { summarizeOpen } from "./format.mjs";
 import { appendSpool } from "./spool.mjs";
 import { backstopReason, leaseKey, leaseLive, readState, sessionIdOf, sessionKey, writeState } from "./wip.mjs";
 import { projectLabel } from "./label.mjs";
-import { captureReason, fetchSpaces, holdable, isSpacesPage, memberSlugs, pickSpace, projectSlugs } from "./capture.mjs";
+import { attended, captureDue, captureEvery, captureReason, capturing, fetchSpaces, holdable, isSpacesPage, memberSlugs, pickSpace, projectSlugs } from "./capture.mjs";
 
 /** `OpenArgs` (contract tools-io.ts): the caller's own items, one page of ten. */
 const OPEN_ARGS = { for: "me", limit: 10 };
@@ -59,8 +61,16 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
   const sessionId = atSessionEnd || target.kind !== "http" ? null : sessionIdOf(input);
   const key = sessionId === null ? null : sessionKey(found.root, sessionId);
   let state = key === null ? null : readState(key, env);
-  // Started now so the read runs beside the handshake; only on the one turn that may hold for the capture.
-  const spaces = state !== null && !state.captured && holdable(input) ? fetchSpaces(target, deadlineAt).catch(() => null) : null;
+  const now = Date.now();
+  // A finished turn counts toward the next capture; the client continuing for a stop hook is still the same turn.
+  const ended = state !== null && holdable(input);
+  if (ended) {
+    state = { ...state, turns: state.turns + 1 };
+    writeState(key, state, env);
+  }
+  // Started now so the read runs beside the handshake; only on a turn due a capture.
+  const due = ended && capturing(env) && captureDue(state, now, captureEvery(env));
+  const spaces = due ? fetchSpaces(target, deadlineAt).catch(() => null) : null;
   const session = afterAgent ? null : await connect(target, deadlineAt);
   if (session !== null && found.user !== true && state !== null && !leaseLive(state)) {
     const n = state.leases + 1;
@@ -74,7 +84,8 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
       if (!(error instanceof ToolError)) {
         throw error;
       }
-      if (!state.nudged && input.stop_hook_active !== true) {
+      // Never in a session no person attends: the held turn's line would replace the answer a script reads.
+      if (!state.nudged && input.stop_hook_active !== true && attended(env)) {
         holds.push(backstopReason(messageOf(error), what));
         state = { ...state, nudged: true };
         writeState(key, state, env);
@@ -88,7 +99,8 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
     if (choice !== null) {
       holds.push(captureReason(choice, args.client));
     }
-    writeState(key, { ...state, captured: true }, env);
+    state = { ...state, covered: state.turns, capturedAt: now };
+    writeState(key, state, env);
   }
   return session === null ? null : callTool(session, "open", OPEN_ARGS);
 });

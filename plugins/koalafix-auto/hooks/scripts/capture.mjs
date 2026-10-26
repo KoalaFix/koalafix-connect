@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 KoalaFix PTY LTD and the Kalibrate contributors
 
-// The Stop hook's decision capture: once per session, the hook holds the turn with a reason that tells the
+// The Stop hook's decision capture: at the end of the first turn, then again once CAPTURE_TURNS turns or
+// CAPTURE_MINUTES minutes have passed since the last capture, the hook holds the turn with a reason that tells the
 // model to save each decision the session made about the team's shared work with `remember` (kind decision, lane
-// team), in its own words. The model in the session does the writing: the hook makes no model call and sends no
-// transcript, and the reason never carries the person's prompt. The only request it adds is one read of the person's
-// spaces (`GET /api/v1/spaces`), made once, on the turn it holds.
+// team), in its own words, skipping what it already saved. The model in the session does the writing: the Stop hook
+// makes no model call and sends no transcript, and the reason never carries the person's prompt. The only request it
+// adds is one read of the person's spaces (`GET /api/v1/spaces`), on each turn it holds. When a session ends with
+// turns no capture covered, the session-end hook covers them (capture-end.mjs).
+// Only a session a person is attending captures: Claude Code tells its hooks with CLAUDE_CODE_SESSION_ATTENDED, "0"
+// for `claude -p`, the Agent SDK and background sessions, where a held turn would replace the answer a script reads.
 // Which space: the person's only member space; else the member space named after this project (the slug
 // `koalafix init` gives a project's space: the repository's name, or the folder's); else none, and the reason tells
 // the model to ask the person which space before it saves. No member space, nothing to save to: no hold.
@@ -13,6 +17,10 @@
 
 import path from "node:path";
 import { findRepository, remoteName } from "./label.mjs";
+
+/** The default turns and minutes after the last capture that make the next one due. */
+export const CAPTURE_TURNS = 4;
+export const CAPTURE_MINUTES = 20;
 
 /** How many spaces an "ask the person" reason lists by name. */
 export const MAX_LISTED_SPACES = 8;
@@ -97,12 +105,58 @@ export function isSpacesPage(page) {
   return isRecord(page) && Array.isArray(page.spaces);
 }
 
+/**
+ * Whether a person attends this session, so a held turn reaches them rather than replacing the answer a script reads.
+ * Claude Code sets CLAUDE_CODE_SESSION_ATTENDED for its hooks itself: "1" for the terminal, IDE and desktop sessions a
+ * person drives, "0" for `claude -p`, the Agent SDK, background and child sessions, whatever the parent's environment
+ * said. An older Claude Code without it is told apart by CLAUDE_CODE_ENTRYPOINT (`sdk-cli`, `sdk-ts`, `sdk-py`).
+ * Other clients set neither and count as attended.
+ */
+export function attended(env) {
+  const flag = env.CLAUDE_CODE_SESSION_ATTENDED;
+  if (flag === "0" || flag === "1") {
+    return flag === "1";
+  }
+  return !String(env.CLAUDE_CODE_ENTRYPOINT ?? "").startsWith("sdk");
+}
+
+/** Whether this session captures. KALIBRATE_CAPTURE: "off" never, "always" in every session (a scripted run that wants it), else when attended. */
+export function capturing(env) {
+  const mode = String(env.KALIBRATE_CAPTURE ?? "").trim().toLowerCase();
+  if (mode === "off" || mode === "0" || mode === "false") {
+    return false;
+  }
+  return mode === "always" || attended(env);
+}
+
+function positive(text, fallback) {
+  const value = Number.parseInt(String(text ?? ""), 10);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+/** The turns and minutes between captures: KALIBRATE_CAPTURE_TURNS and KALIBRATE_CAPTURE_MINUTES, else the defaults. */
+export function captureEvery(env) {
+  return { turns: positive(env.KALIBRATE_CAPTURE_TURNS, CAPTURE_TURNS), minutes: positive(env.KALIBRATE_CAPTURE_MINUTES, CAPTURE_MINUTES) };
+}
+
+/**
+ * Whether the turn that just ended is due a capture. `state.turns` counts this turn; `state.covered` is the turn count
+ * the last capture covered and `state.capturedAt` its time (null before the first). The first turn is always due.
+ */
+export function captureDue(state, now, every) {
+  if (state.capturedAt === null) {
+    return true;
+  }
+  const since = state.turns - state.covered;
+  return since > 0 && (since >= every.turns || now - state.capturedAt >= every.minutes * 60_000);
+}
+
 const WHAT = "save each decision this session made about the team's shared work (code, conventions, process, ownership, handoffs), so teammates' assistants know it";
 const RULES = [
   "Write each one in your own words: one or two sentences on what was decided and why.",
   "Never quote the person's messages or copy any prompt text, and do not set user_words.",
   "Leave out anything personal (health, HR, pay, private life) and any secret, token or credential.",
-  "Skip any decision you already saved to the team this session.",
+  "Skip every decision this session already saved to the team: look at your earlier koalafix remember calls, and never save one again in other words, even when its answer said duplicate or near_duplicate.",
 ].join(" ");
 
 /**
@@ -124,9 +178,19 @@ function askEnding(client) {
   return `If nothing team-relevant was decided, or it is already saved, save nothing and ask nothing.${again} The question is your whole reply: no other closing line.`;
 }
 
-/** The reason the Stop hook holds the turn with, for a `pickSpace` answer. */
-export function captureReason(choice, client = "claude-code") {
-  const head = "KoalaFix (a hook, once per session): before you finish,";
+/** The last pass after a session ended (capture-end.mjs): nobody reads its reply. */
+const END_HEAD = "KoalaFix (a hook, after this session ended; the person has gone and reads no reply):";
+const END_ENDING = "If nothing team-relevant is left to save, save nothing. Write no reply either way.";
+
+/**
+ * The reason the Stop hook holds the turn with, for a `pickSpace` answer; with `atEnd`, the prompt of the last pass
+ * after the session ended, which is only ever given a `{ space }` answer.
+ */
+export function captureReason(choice, client = "claude-code", atEnd = false) {
+  const head = "KoalaFix (a hook, now and then in a session): before you finish,";
+  if (atEnd && "space" in choice) {
+    return `${END_HEAD} ${WHAT}. For each one call the koalafix remember tool with kind "decision", lane "team", space "${choice.space}". ${RULES} ${END_ENDING}`;
+  }
   if ("space" in choice) {
     const call = `For each one call the koalafix remember tool with kind "decision", lane "team", space "${choice.space}".`;
     return `${head} ${WHAT}. ${call} ${RULES} ${ending(client)}`;

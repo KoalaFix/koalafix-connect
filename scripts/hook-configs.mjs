@@ -33,7 +33,7 @@ function claudeCode() {
     return { type: "command", command: "node", args: [`\${CLAUDE_PLUGIN_ROOT}/${SCRIPTS}/${script}.mjs`, "--user"], timeout };
   };
   return {
-    description: "KoalaFix team memory, automatic: the brief at session start, recall on each prompt, and once a session your AI saves the decisions it made to the team. Does nothing in a project with its own koalafix init install. Needs Node.js 22 or later; without it the hooks do nothing.",
+    description: "KoalaFix team memory, automatic: the brief at session start, recall on each prompt, and now and then your AI saves the decisions made to the team (never in a claude -p or SDK run). Does nothing in a project with its own koalafix init install. Needs Node.js 22 or later; without it the hooks do nothing.",
     hooks: {
       SessionStart: [{ matcher: "startup|resume|compact", hooks: [hook("sessionStart")] }],
       UserPromptSubmit: [{ hooks: [hook("prompt")] }],
@@ -100,7 +100,7 @@ function gemini() {
     hooks: {
       SessionStart: [{ matcher: "*", hooks: [hook("sessionStart", "koalafix-session-start")] }],
       BeforeAgent: [{ matcher: "*", hooks: [hook("prompt", "koalafix-prompt")] }],
-      // AfterAgent is Gemini CLI's end of a turn: stop.mjs only captures the session's decisions there, once a session.
+      // AfterAgent is Gemini CLI's end of a turn: stop.mjs only captures the session's decisions there.
       AfterAgent: [{ matcher: "*", hooks: [hook("stop", "koalafix-capture")] }],
       // At SessionEnd stop.mjs prints what is open (it holds nothing there), and session-end.mjs closes any lease.
       SessionEnd: [{ matcher: "*", hooks: [hook("stop", "koalafix-session-end"), hook("sessionEnd", "koalafix-wip-end")] }],
