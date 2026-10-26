@@ -52,8 +52,8 @@ choose to authenticate.
 - When the task is finished: call `work` with action `done`. Call `open` to see what is still open for you.
 - `share` and `settle` only with the user's yes.
 
-Session hooks (a recall brief when a session starts, open items when it stops) are not part of this plugin.
-They are available through the connect command on the Integrations page of the KoalaFix dashboard at https://mcp.koalafix.com.
+Session hooks (the brief at session start, a recall on every prompt, work started and closed for you) are not part
+of this plugin. Install `koalafix-auto@koalafix-connect` beside it for Claude Code, Codex and Cursor.
 
 ## Links
 

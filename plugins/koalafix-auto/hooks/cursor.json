@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "node ./hooks/scripts/session-start.mjs --user --client cursor",
+        "timeout": 10
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "node ./hooks/scripts/prompt.mjs --user --client cursor",
+        "timeout": 5
+      }
+    ],
+    "stop": [
+      {
+        "command": "node ./hooks/scripts/stop.mjs --user --client cursor",
+        "timeout": 5
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "node ./hooks/scripts/session-end.mjs --user --client cursor",
+        "timeout": 5
+      }
+    ]
+  }
+}

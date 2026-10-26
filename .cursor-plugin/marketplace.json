@@ -11,6 +11,11 @@
       "name": "koalafix",
       "source": "plugins/koalafix",
       "description": "Shared team memory and work items for Cursor and the other AI tools your team uses."
+    },
+    {
+      "name": "koalafix-auto",
+      "source": "plugins/koalafix-auto",
+      "description": "Makes KoalaFix automatic in Cursor: the team brief at session start, recall on each prompt, work started and closed for you. Install it beside the koalafix plugin. Needs Node.js 22 or later."
     }
   ]
 }

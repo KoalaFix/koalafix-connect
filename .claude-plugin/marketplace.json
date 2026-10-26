@@ -11,7 +11,22 @@
       "source": "./plugins/koalafix",
       "description": "Shared team memory and work items for Claude Code and the other AI tools your team uses.",
       "category": "development",
-      "tags": ["memory", "team", "work-items"]
+      "tags": [
+        "memory",
+        "team",
+        "work-items"
+      ]
+    },
+    {
+      "name": "koalafix-auto",
+      "source": "./plugins/koalafix-auto",
+      "description": "Makes KoalaFix automatic in Claude Code and Cowork: the team brief at session start, recall on each prompt, work started and closed for you. Installs the koalafix plugin with it. Needs Node.js 22 or later.",
+      "category": "development",
+      "tags": [
+        "memory",
+        "team",
+        "hooks"
+      ]
     }
   ]
 }
