@@ -18,7 +18,7 @@ export const REPLAYABLE_TOOLS = new Set(["remember", "verify", "work"]);
 /** The most calls one session-start hook replays, so a long outage cannot eat the hook's budget. */
 export const MAX_REPLAY = 50;
 
-/** A call the server answered with an error is dropped after this many tries. */
+/** A call the server answered with an error is dropped after this many tries; a write limit (`rate_limited`) is no try. */
 export const MAX_TRIES = 3;
 
 const STALE_CLAIM_MS = 5 * 60 * 1000;
@@ -171,7 +171,8 @@ export async function drainSpool(send, options = {}) {
         await send(entry);
         result.replayed++;
       } catch (error) {
-        if (error instanceof Error && error.name === "ToolError") {
+        // A write limit is not this call's fault: stop here and keep it and the rest for a later session start.
+        if (error instanceof Error && error.name === "ToolError" && error.code !== "rate_limited") {
           const tries = (typeof entry.tries === "number" ? entry.tries : 0) + 1;
           if (tries >= MAX_TRIES) {
             result.dropped++;
