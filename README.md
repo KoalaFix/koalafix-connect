@@ -17,6 +17,8 @@ MCP server address and the agent instructions. The KoalaFix service itself is no
 - The `koalafix` plugin contains no scripts, no hooks, no tokens and no telemetry, and runs nothing on your machine.
 - The optional `koalafix-auto` plugin (Claude Code, Cowork, Codex, Cursor) and the Gemini CLI extension add session
   hooks that make team memory automatic. They run Node.js scripts on your machine; see [Session hooks](#session-hooks).
+- Kalibrate is the name of the engine behind KoalaFix, which is why some files and settings here say kalibrate
+  (`~/.kalibrate/`, the `KALIBRATE_*` variables).
 
 ## Install
 
@@ -30,7 +32,7 @@ MCP server address and the agent instructions. The KoalaFix service itself is no
 `koalafix-auto` brings the `koalafix` plugin with it. For the tools without hooks, install `koalafix@koalafix-connect`
 instead.
 
-On Claude Code 2.1.275 or later, one step also works:
+On Claude Code 2.1.275 or later, one step installs the `koalafix` plugin only (no hooks):
 `/plugin install koalafix --marketplace KoalaFix/koalafix-connect`.
 
 From a shell: `claude plugin marketplace add KoalaFix/koalafix-connect`, then
@@ -54,6 +56,10 @@ Add to Cursor button on the dashboard's Integrations page at https://mcp.koalafi
 repository as a team marketplace under Dashboard, Plugins & MCPs. Add `koalafix-auto` from the same marketplace for
 the session hooks.
 
+Until the Marketplace listing is live, if you are not on Teams or Enterprise, the Add to Cursor button gives you the
+MCP server only: no rule and no hooks. To get the rule, copy `plugins/koalafix/rules/koalafix.mdc` from this
+repository into your project's `.cursor/rules/`.
+
 ### Gemini CLI
 
 ```
@@ -63,7 +69,7 @@ gemini extensions install https://github.com/KoalaFix/koalafix-connect
 ### Other clients
 
 ChatGPT, Claude on the web, desktop and mobile, VS Code, Windsurf, Zed, JetBrains, OpenCode and any other MCP
-client: open the Connect page at https://mcp.koalafix.com for a one-click link or a configuration snippet for your client.
+client: open the dashboard's Integrations page at https://mcp.koalafix.com for a one-click link or a configuration snippet for your client.
 
 ## Sign in
 
@@ -74,6 +80,10 @@ keeps the token; no file here holds one. To sign in ahead of time:
 - Claude Code: run `/mcp`, pick `koalafix`, choose to authenticate.
 - Codex: run `codex mcp login koalafix`.
 - Gemini CLI: run `/mcp auth koalafix`.
+
+The session hooks (`koalafix-auto`, and the Gemini CLI extension) sign in once on their own, on top of your client's
+sign-in: at the first session start the agent shows you a link and a code to approve in the browser. See
+[Session hooks](#session-hooks).
 
 ## The routine your agent follows
 
