@@ -18,7 +18,8 @@
 // session-start brief stands alone. It fails open: on any problem it adds nothing, prints one line on stderr and
 // exits 0. Budget 1.5 s (KALIBRATE_HOOK_BUDGET_MS overrides). Other clients pass `--client` and `--project`.
 // No MCP handshake (KOA2-64): each call is one `tools/call` request, sent alone with the `MCP-Protocol-Version`
-// header, so a later prompt is one HTTP request and the first is two in parallel. A server that wants the handshake
+// header, so a later prompt is one HTTP request and the first is two in parallel (a plugin install's first adds its
+// spaces read, beside the recall, before the lease start). A server that wants the handshake
 // gets it once, and the hook says so on stderr.
 
 import { BUDGETS, IDEMPOTENCY_META, UNLOGGED_META, budgetFrom, callTool, connectStateless, finish, messageOf, runWithBudget } from "./connect.mjs";
@@ -51,13 +52,31 @@ async function startLease(session, key, n, what, client) {
   }
 }
 
-/** A plugin install: whether the session's lease would land in this folder's space. Unreadable spaces start none. */
+/** How long before the budget ends the lease's calls are given up on, so the memory block still goes out. */
+const LEASE_CUTOFF_MS = 250;
+
+/** What a lease start that had not answered by the cutoff resolves to. */
+const LATE = Symbol("late");
+
+/** The promise's value, or `late` when it has not settled by `until` (ms since the epoch). */
+function settleBy(promise, until, late) {
+  let timer;
+  const cutoff = new Promise((resolve) => {
+    timer = setTimeout(resolve, Math.max(0, until - Date.now()), late);
+  });
+  return Promise.race([promise, cutoff]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * A plugin install: whether the session's lease would land in this folder's space (lease-space.mjs). True or false
+ * once the spaces are read; null when they could not be, so the next prompt reads them again.
+ */
 async function leaseAllowed(target, root, deadlineAt) {
   try {
     return autoLeaseSpace(await fetchSpaces(target, deadlineAt), root, pickedSpace(root, env)) !== null;
   } catch (error) {
-    notice += `koalafix: prompt hook could not read your spaces, so it started no WIP lease: ${messageOf(error)}\n`;
-    return false;
+    notice += `koalafix: prompt hook could not read your spaces, so it started no WIP lease yet: ${messageOf(error)}\n`;
+    return null;
   }
 }
 
@@ -102,19 +121,26 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.prompt), async (dead
   session = connectStateless(target, deadlineAt);
   const about = recallQuery(prompt);
   const recall = callTool(session, "recall", { about, limit: RECALL_LIMIT }, { [UNLOGGED_META]: true }).then((result) => result.structured ?? null);
+  // The lease's calls stop short of the budget. A start still unanswered then is not counted, so the next try sends
+  // the same idempotency key and gets the same lease back rather than leaving a second one open.
+  const leaseBy = deadlineAt - LEASE_CUTOFF_MS;
+  const leaseIf = (ok, n) => (ok === true ? settleBy(startLease(session, key, n, projectLabel(found.root), args.client), leaseBy, LATE) : null);
   if (state === null) {
-    const allowed = project ? Promise.resolve(true) : leaseAllowed(target, found.root, deadlineAt);
-    const started = allowed.then((ok) => (ok ? startLease(session, key, 1, projectLabel(found.root), args.client) : null));
-    const [memory, work, autoLease] = await Promise.all([recall, started, allowed]);
+    const allowed = project ? Promise.resolve(true) : leaseAllowed(target, found.root, leaseBy);
+    const [memory, started, autoLease] = await Promise.all([recall, allowed.then((ok) => leaseIf(ok, 1)), allowed]);
+    const work = started === LATE ? null : started;
     const block = firstBlock(memory, work);
     context = block.text;
-    writeState(key, { lease: work?.lease ?? null, expiresAt: work?.expires_at ?? null, leases: 1, shown: block.shown, nudged: false, autoLease }, env);
+    writeState(key, { lease: work?.lease ?? null, expiresAt: work?.expires_at ?? null, leases: started === LATE ? 0 : 1, shown: block.shown, nudged: false, autoLease }, env);
     return;
   }
-  const auto = project || state.autoLease;
-  const restart = !auto || leaseLive(state) ? null : startLease(session, key, state.leases + 1, projectLabel(found.root), args.client);
-  const [memory, work] = await Promise.all([recall, restart]);
-  const next = work === null ? state : { ...state, lease: work.lease ?? null, expiresAt: work.expires_at ?? null, leases: state.leases + 1 };
+  // A plugin install whose spaces could not be read on the first prompt reads them again, until it knows.
+  const allowed = project || state.autoLease !== null ? Promise.resolve(project || state.autoLease) : leaseAllowed(target, found.root, leaseBy);
+  const restart = allowed.then((ok) => (leaseLive(state) ? null : leaseIf(ok, state.leases + 1)));
+  const [memory, started, autoLease] = await Promise.all([recall, restart, allowed]);
+  const work = started === LATE ? null : started;
+  const known = { ...state, autoLease: project ? state.autoLease : autoLease };
+  const next = work === null ? known : { ...known, lease: work.lease ?? null, expiresAt: work.expires_at ?? null, leases: state.leases + 1 };
   const news = newsBlock(memory, next);
   const restarted = work === null ? null : restartedLine(work);
   const parts = [restarted, news?.text ?? null].filter((part) => part !== null);

@@ -273,7 +273,7 @@ export async function fetchSpaces(target, deadlineAt) {
   const info = target.clientInfo ?? { name: "kalibrate-claude-code-hook", version: "0.2.0" };
   const headers = { accept: "application/json", authorization: `Bearer ${target.token}`, "user-agent": `${info.name}/${info.version}` };
   const signal = AbortSignal.timeout(Math.max(1, deadlineAt - Date.now()));
-  const response = await fetch(`${target.api}/api/v1/spaces`, { method: "GET", headers, redirect: "error", signal });
+  const response = await fetch(`${target.api}/api/v1/spaces?limit=200`, { method: "GET", headers, redirect: "error", signal });
   if (!response.ok) {
     await response.body?.cancel();
     throw new Error(`GET /api/v1/spaces answered HTTP ${response.status}`);

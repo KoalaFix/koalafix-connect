@@ -6,9 +6,10 @@ plugin, the agent recalls and records work when it decides to. With this one, ho
 - **Session start:** the team's brief (facts and open items) goes in front of the session.
 - **Each prompt:** one recall about what you asked, inside 1.5 seconds, with the verdict in front of the prompt.
   Later prompts add only what the session has not been shown. On the first prompt it also starts your
-  work-in-progress lease, so teammates see who is on what: when you are in one team space, or the space it would
-  go to is the one for this folder (the one you picked for it, or the one named after the project). Otherwise it
-  starts none, so your repository never shows in another team's brief; your agent can still name its work with the
+  work-in-progress lease, so teammates see who is on what: when the space it would go to is the one for this
+  folder (the one you picked for it, or the one named after the project), or you are in one team space and the
+  folder is a git repository. Otherwise it starts none, so a personal folder's name never reaches your team and your
+  repository never shows in another team's brief; your agent can still name its work with the
   `work` tool. The session-end hook closes the lease.
 - **End of a turn, now and then:** at the end of the first turn with a real prompt, then every 4 turns or 20 minutes
   (`KALIBRATE_CAPTURE_TURNS`, `KALIBRATE_CAPTURE_MINUTES`), your agent is asked to save each decision made since

@@ -95,9 +95,9 @@ With only the `koalafix` plugin, the agent uses team memory when it decides to. 
 - **Each prompt:** one recall about what you asked, in under 1.5 seconds, with the verdict in front of the prompt.
   Later prompts add only what this session has not been shown. "ok" or "continue" asks the server nothing. The
   first prompt also starts your work-in-progress lease, so teammates see who is on what, when the space the server
-  files it in is this folder's space: you are in one space, or the space you picked for the folder or the one named
-  after the project is your home space. Otherwise it starts none, so a repository never shows in another team's
-  brief; your agent can still name its work with the `work` tool.
+  files it in is this folder's space: the space you picked for the folder or the one named after the project is your
+  home space, or you are in one space and the folder is a git repository. Otherwise it starts none, so a personal
+  folder's name never reaches your team and a repository never shows in another team's brief; your agent can still name its work with the `work` tool.
 - **End of a turn, now and then:** at the end of the first turn that had a real prompt, then whenever 4 more turns
   or 20 minutes have passed since the last time (`KALIBRATE_CAPTURE_TURNS`, `KALIBRATE_CAPTURE_MINUTES`), the hook
   asks your agent to save each decision made since about the team's shared work (code, conventions, process,
