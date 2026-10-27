@@ -4,7 +4,7 @@
 // Claude Code Stop hook, run at the end of every turn. Three jobs:
 // - The WIP backstop. When this session had a real prompt (the prompt hook left its state) but holds no live lease,
 //   because the prompt hook could not start one or the lease ended, the hook starts it itself, named after the
-//   project (label.mjs), never after a prompt. A plugin install (`--user`) never gets one. If the server refuses,
+//   project (label.mjs), never after a prompt. A plugin install (`--user`) gets one only when the prompt hook found its lease lands in the folder's space. If the server refuses,
 //   it holds the turn once with a reason the model acts on (`decision: "block"`), only in a session a person attends
 //   (so never in Cursor or Gemini CLI), never while `stop_hook_active` is set and never twice a session. A server it
 //   cannot reach adds nothing.
@@ -87,7 +87,8 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
   const due = ended && captureDue(state, now, captureEvery(env)) && capturing(env, args.client, input);
   const spaces = due ? fetchSpaces(target, deadlineAt).catch(() => null) : null;
   const session = afterAgent ? null : await connect(target, deadlineAt);
-  if (session !== null && found.user !== true && state !== null && !leaseLive(state)) {
+  // A plugin install restarts its lease only when the first prompt found it lands in this folder's space (KOA2-5).
+  if (session !== null && state !== null && (found.user !== true || state.autoLease === true) && !leaseLive(state)) {
     const n = state.leases + 1;
     const what = projectLabel(found.root);
     const work = { action: "start", what, agent: { client: args.client }, idempotency_key: leaseKey(key, n) };

@@ -19,8 +19,8 @@ This project uses KoalaFix, the team's shared memory, through the `koalafix` MCP
 - When the task is finished: call `work` with action `done`. Call `open` to see what is still open for you.
 - `share` and `settle` only with the user's yes.
 
-When KoalaFix hooks are installed, a block marked "added by a hook" already holds a recall (and, in a project set
-up with `koalafix init`, a work lease) for this task: use it instead of calling `recall` and `work` again. Without hooks, follow every step yourself.
+When KoalaFix hooks are installed, a block marked "added by a hook" already holds a recall (and, when the hooks started one, a work
+lease) for this task: use it instead of calling `recall` and `work` again. Without hooks, follow every step yourself.
 
 ## Notes
 - Every fact comes with a sticker: who checked it, and when. Trust the verdict over your own guess.
