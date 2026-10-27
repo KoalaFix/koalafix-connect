@@ -94,8 +94,10 @@ With only the `koalafix` plugin, the agent uses team memory when it decides to. 
 - **Session start:** the team's brief (facts, open items) goes in front of the session.
 - **Each prompt:** one recall about what you asked, in under 1.5 seconds, with the verdict in front of the prompt.
   Later prompts add only what this session has not been shown. "ok" or "continue" asks the server nothing. The
-  plugin starts no work-in-progress lease (a project set up with `koalafix init` gets one); your agent can still
-  name its work with the `work` tool.
+  first prompt also starts your work-in-progress lease, so teammates see who is on what, when the space the server
+  files it in is this folder's space: you are in one space, or the space you picked for the folder or the one named
+  after the project is your home space. Otherwise it starts none, so a repository never shows in another team's
+  brief; your agent can still name its work with the `work` tool.
 - **End of a turn, now and then:** at the end of the first turn that had a real prompt, then whenever 4 more turns
   or 20 minutes have passed since the last time (`KALIBRATE_CAPTURE_TURNS`, `KALIBRATE_CAPTURE_MINUTES`), the hook
   asks your agent to save each decision made since about the team's shared work (code, conventions, process,
@@ -111,8 +113,7 @@ With only the `koalafix` plugin, the agent uses team memory when it decides to. 
   short background run, `claude -p --resume <session> --fork-session --no-session-persistence`, that can only call
   the koalafix `remember` and `recall` tools, so the decisions of the last turns are saved too. It is one AI call on
   your own Claude Code sign-in, nothing of it is saved as a session, and your session's own history is left as it
-  was; `KALIBRATE_CAPTURE_AT_END=off` turns it off. In a `koalafix init` project, the lease the hooks started is
-  closed.
+  was; `KALIBRATE_CAPTURE_AT_END=off` turns it off. The lease the hooks started is closed.
 - **First use:** with no KoalaFix credential on the machine, the session-start hook starts a browser sign-in and
   the agent shows you a link and a code. Approve it once; the hooks turn on by themselves.
 
@@ -133,7 +134,9 @@ browser sign-in or `koalafix login`) and send it only to the exact server it was
   marked so the server keeps no log of it;
 - each time it asks for the decisions, a request for the list of your spaces, to pick where they go (if the
   request fails, it is tried again at the end of the next turn);
-- in a `koalafix init` project only, the lease's description, built from the project, never from your prompt:
+- on the first prompt, a request for the list of your spaces, to tell whether your lease would go to this folder's
+  space;
+- when it starts a lease, the lease's description, built from the project, never from your prompt:
   "working in <repo> on <branch>", or the folder name, with credential shapes taken out. **Your teammates see it** as
   your work in progress; and the lease's start and end.
 
@@ -152,8 +155,8 @@ only address in them is the hosted server, `https://mcp.koalafix.com`, where the
 down or slow. A prompt waits at most the hook's 1.5 second budget, and no hook blocks a prompt or a tool call. The
 exceptions are small: now and then the stop hook asks the agent to save the session's team decisions (one more
 step for the agent, which saves nothing when nothing was decided; in Gemini CLI the agent also gives its last answer
-again, since Gemini CLI replaces an answer a hook holds), and in a `koalafix init` project, when the server
-refuses the work lease, it asks the agent once to start it. In a project that has its own `koalafix init` install, the plugin's hooks do nothing, so nothing runs
+again, since Gemini CLI replaces an answer a hook holds), and when the server refuses the work lease the hooks
+started, it asks the agent once to start it. In a project that has its own `koalafix init` install, the plugin's hooks do nothing, so nothing runs
 twice.
 
 **Node.js.** Claude Code's native installer, the Codex binary and Cursor do not bring Node with them. Without Node the

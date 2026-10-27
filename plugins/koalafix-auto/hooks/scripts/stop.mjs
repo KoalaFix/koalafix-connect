@@ -87,7 +87,8 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
   const due = ended && captureDue(state, now, captureEvery(env)) && capturing(env, args.client, input);
   const spaces = due ? fetchSpaces(target, deadlineAt).catch(() => null) : null;
   const session = afterAgent ? null : await connect(target, deadlineAt);
-  if (session !== null && found.user !== true && state !== null && !leaseLive(state)) {
+  // A plugin install restarts its lease only when the first prompt found it lands in this folder's space (KOA2-5).
+  if (session !== null && state !== null && (found.user !== true || state.autoLease) && !leaseLive(state)) {
     const n = state.leases + 1;
     const what = projectLabel(found.root);
     const work = { action: "start", what, agent: { client: args.client }, idempotency_key: leaseKey(key, n) };

@@ -1,7 +1,7 @@
 {
   "name": "koalafix-auto",
   "displayName": "KoalaFix automatic memory",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Makes KoalaFix automatic in Claude Code and Cowork: the team brief at session start, recall on each prompt, work in progress started and closed for you, sign-in through the browser on first use. Installs the koalafix plugin with it. Needs Node.js 22 or later on the machine.",
   "author": {
     "name": "KoalaFix",

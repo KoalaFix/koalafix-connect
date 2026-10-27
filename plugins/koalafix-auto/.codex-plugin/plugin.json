@@ -1,6 +1,6 @@
 {
   "name": "koalafix-auto",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Makes KoalaFix automatic in Codex: the team brief at session start, recall on each prompt, work in progress started and closed for you. Install it beside the koalafix plugin. Needs Node.js 22 or later.",
   "author": {
     "name": "KoalaFix",
