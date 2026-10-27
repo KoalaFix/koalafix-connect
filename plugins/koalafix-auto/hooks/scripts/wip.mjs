@@ -119,6 +119,13 @@ export function readState(key, env = process.env) {
       leases: Number.isInteger(parsed.leases) ? parsed.leases : 0,
       shown: parsed.shown.filter((entry) => typeof entry === "string"),
       nudged: parsed.nudged === true,
+      turns: Number.isInteger(parsed.turns) && parsed.turns >= 0 ? parsed.turns : 0,
+      covered: Number.isInteger(parsed.covered) && parsed.covered >= 0 ? parsed.covered : 0,
+      capturedAt: Number.isFinite(parsed.capturedAt) ? parsed.capturedAt : null,
+      // The spaces the capture offered when it asked the person which one (once a session), else null.
+      asked: Array.isArray(parsed.asked) ? parsed.asked.filter((slug) => typeof slug === "string") : null,
+      // The transcript's size when it asked: the pick is looked for only after it.
+      askedFrom: Number.isInteger(parsed.askedFrom) && parsed.askedFrom >= 0 ? parsed.askedFrom : 0,
     };
   } catch {
     return null;

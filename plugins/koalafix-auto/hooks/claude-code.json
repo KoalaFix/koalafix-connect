@@ -1,5 +1,5 @@
 {
-  "description": "KoalaFix team memory, automatic: the brief at session start, recall on each prompt, the WIP lease started and closed for you. Does nothing in a project with its own koalafix init install. Needs Node.js 22 or later; without it the hooks do nothing.",
+  "description": "KoalaFix team memory, automatic: the brief at session start, recall on each prompt, and now and then your AI saves the decisions made to the team (never in a claude -p or SDK run). Does nothing in a project with its own koalafix init install. Needs Node.js 22 or later; without it the hooks do nothing.",
   "hooks": {
     "SessionStart": [
       {
