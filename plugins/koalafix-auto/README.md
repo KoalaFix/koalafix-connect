@@ -25,7 +25,10 @@ plugin, the agent recalls and records work when it decides to. With this one, ho
   your own sign-in, limited to the koalafix `remember` and `recall` tools, never saved as a session.
   `KALIBRATE_CAPTURE_AT_END=off` turns it off.
 - **First use:** with no KoalaFix credential on the machine, the agent shows you a sign-in link and a code. Approve
-  it once in the browser and the hooks turn on by themselves.
+  it once in the browser and the hooks turn on by themselves. In Claude Code and Cowork the KoalaFix tools use the
+  same sign-in, from the next session (or now, after Reconnect on `koalafix` in `/mcp`): this plugin carries its own
+  copy of the `koalafix` server, which Claude Code connects in place of the `koalafix` plugin's when this plugin is
+  listed first in your settings, as installing it does. See [Sign in](../../README.md#sign-in).
 
 ## Install
 
@@ -55,8 +58,12 @@ this repository as a team marketplace.
   you name when it asks (up to eight space names go into its context for that question): **your teammates see
   them**. In a personal project, tell your agent when a session is not team work. The hooks never send the session's
   transcript and make no AI call of their own, except the one session-end run above. They write this session's state and a retry queue under `~/.kalibrate/`.
+- In Claude Code and Cowork, one more script, `hooks/scripts/headers.mjs --user`, is the `headersHelper` of this
+  plugin's copy of the `koalafix` server. Claude Code runs it each time it connects that server. It reads no project
+  file and prints an Authorization header with your credential only for exactly the server Claude Code is connecting
+  to, over https; with none, it prints `{}` and Claude Code's own OAuth sign-in takes over.
 - They contain no token. The only address in them is the hosted server, where the first browser sign-in goes. They
-  never print a token.
+  never print a token, except the helper, to Claude Code, as that header.
 - Every hook gives up silently on any problem (no Node, no credential, a server down or slow), and in a project with
   its own `koalafix init` install they do nothing, so nothing runs twice.
 

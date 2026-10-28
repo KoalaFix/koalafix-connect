@@ -2,29 +2,17 @@
 // Copyright 2026 KoalaFix PTY LTD and the Kalibrate contributors
 
 // Where a hook goes: the hook JSON Claude Code sends, the trusted project folder (CLAUDE_PROJECT_DIR) and its
-// `.kalibrate/config.json`, and how to reach that project's server (the `.mcp.json` command in local mode,
-// `serverUrl` and `.kalibrate/token` in hosted mode). How to talk to it is connect.mjs. Plain ESM, Node 22 APIs
-// only, no dependencies.
+// `.kalibrate/config.json`, and how to reach that project's hosted server (`serverUrl` and `.kalibrate/token`). How to
+// talk to it is connect.mjs. Plain ESM, Node 22 APIs only, no dependencies.
 
 import fs from "node:fs";
 import path from "node:path";
-import { userToken } from "./credentials.mjs";
+import { NoCredentialError, userToken } from "./credentials.mjs";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/** `${VAR}` and `${VAR:-default}`, the two forms Claude Code expands in .mcp.json. An unset variable without a default stays as written. */
-export function expandVars(text, env = process.env) {
-  return text.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g, (whole, name, fallback) => {
-    const value = env[name];
-    if (value !== undefined && value !== "") {
-      return value;
-    }
-    return fallback !== undefined ? fallback : whole;
-  });
 }
 
 /** A bearer token only goes over https, or over http to this machine. Same rule as the adapter's config writer. */
@@ -176,9 +164,12 @@ export function findConfig(root) {
   return { root: resolved, dir, file, config };
 }
 
-/** Hosted mode: `mode: "hosted"`, or no mode and a `serverUrl`. */
-export function isHosted(config) {
-  return config.mode === "hosted" || (config.mode === undefined && typeof config.serverUrl === "string" && config.serverUrl !== "");
+/** The config's `serverUrl`. A config without one is invalid. */
+export function serverUrlOf(config) {
+  if (typeof config.serverUrl !== "string" || config.serverUrl === "") {
+    throw new Error(".kalibrate/config.json has no serverUrl; run koalafix init");
+  }
+  return config.serverUrl;
 }
 
 /**
@@ -203,7 +194,7 @@ export function readToken(found, env = process.env) {
  * @param {{ serverUrl: string, token: string } | null} server
  */
 export function userFound(root, server) {
-  return server === null ? null : { root: path.resolve(root), dir: null, file: null, config: { mode: "hosted", serverUrl: server.serverUrl }, user: true };
+  return server === null ? null : { root: path.resolve(root), dir: null, file: null, config: { serverUrl: server.serverUrl }, user: true };
 }
 
 /** Whether the project has its own `koalafix init` install: a plugin hook then stands down, so nothing runs twice. */
@@ -212,70 +203,15 @@ export function hasProjectInstall(root) {
 }
 
 /**
- * Our entry in `<root>/.mcp.json`, the trusted project folder's own file: `mcpServers.koalafix`, else the
- * `mcpServers.kalibrate` an init from before the rename wrote. A symbolic link is refused.
+ * How to reach the server: `serverUrl` with the bearer token in `.kalibrate/token`, or the person's own credential
+ * for exactly that server. The token is never read from the environment here: a cloned repository chooses
+ * `serverUrl`, so a token from the user's own environment must not follow it.
  */
-function readMcpEntry(root) {
-  const file = path.join(root, ".mcp.json");
-  const stat = lstatOrNull(file);
-  if (stat === null) {
-    return null;
+export function resolveTarget(found, env = process.env) {
+  const serverUrl = serverUrlOf(found.config);
+  const token = readToken(found, env);
+  if (token === "") {
+    throw new NoCredentialError(found.user === true ? "no KoalaFix credential for this server; run koalafix login" : ".kalibrate/token is missing or empty, and koalafix login has no token for this server");
   }
-  if (stat.isSymbolicLink()) {
-    throw new Error(".mcp.json in the project folder is a symbolic link; refusing to run a command from it");
-  }
-  try {
-    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
-    const servers = isRecord(parsed) && isRecord(parsed.mcpServers) ? parsed.mcpServers : {};
-    const entry = servers.koalafix !== undefined ? servers.koalafix : servers.kalibrate;
-    return isRecord(entry) ? entry : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Why a hook for another client does nothing in local mode (one stderr line; the hook still exits 0). */
-export const LOCAL_MODE_OTHER_CLIENT = "local mode hooks run only for Claude Code; use hosted mode or Claude Code";
-
-/**
- * How to reach the server. Local mode runs the command the project's `.mcp.json` records for `mcpServers.koalafix`
- * (`kalibrate serve` over stdio, which reads `.kalibrate/token` itself), exactly as Claude Code does. Hosted mode
- * talks to `serverUrl` with the bearer token in `.kalibrate/token`. The token is never read from the environment
- * here: a cloned repository chooses `serverUrl`, so a token from the user's own environment must not follow it.
- *
- * Local mode is Claude Code's alone: `.mcp.json` is Claude Code's file, which Codex, Cursor, Gemini CLI and OpenCode
- * never show their user, so a hook running for one of them (`client` other than `claude-code`) refuses before it
- * reads that file and never starts its command.
- * @param {string} [client]
- */
-export function resolveTarget(found, env = process.env, client = "claude-code") {
-  const { config, root } = found;
-  if (!isHosted(config) && client !== "claude-code") {
-    throw new Error(LOCAL_MODE_OTHER_CLIENT);
-  }
-  const entry = found.user === true ? null : readMcpEntry(root);
-  if (isHosted(config)) {
-    const base = typeof config.serverUrl === "string" && config.serverUrl !== "" ? config.serverUrl : entry?.url;
-    if (typeof base !== "string" || base === "") {
-      throw new Error("hosted mode, but .kalibrate/config.json has no serverUrl");
-    }
-    const token = readToken(found, env);
-    if (token === "") {
-      throw new Error(found.user === true ? "no KoalaFix credential for this server; run koalafix login" : "hosted mode, but .kalibrate/token is missing or empty, and koalafix login has no token for this server");
-    }
-    return { kind: "http", url: mcpEndpoint(base), api: apiBase(base), token };
-  }
-  if (entry === null || typeof entry.command !== "string" || entry.command === "") {
-    throw new Error("local mode, but .mcp.json has no mcpServers.koalafix command");
-  }
-  const args = Array.isArray(entry.args) ? entry.args.map((arg) => expandVars(String(arg), env)) : [];
-  const extra = { CLAUDE_PROJECT_DIR: root };
-  if (isRecord(entry.env)) {
-    for (const [key, value] of Object.entries(entry.env)) {
-      if (typeof value === "string") {
-        extra[key] = expandVars(value, env);
-      }
-    }
-  }
-  return { kind: "stdio", command: expandVars(entry.command, env), args, env: extra, cwd: root };
+  return { url: mcpEndpoint(serverUrl), api: apiBase(serverUrl), token };
 }

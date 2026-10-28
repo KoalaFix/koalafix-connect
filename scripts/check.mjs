@@ -12,6 +12,8 @@
 // 4. No file holds a token, a key or a bearer header, and no hook file names a server: the scripts find the
 //    person's server and token at run time, so the bundle carries neither.
 // 5. The listed koalafix plugin stays hook-free, so the OpenAI directory still takes it.
+// 6. koalafix-auto's copy of the koalafix server (Claude Code) has the koalafix plugin's URL and runs a copied helper
+//    with --user, and the listed plugin names no helper.
 // Exits 1 and names each problem.
 
 import { execFileSync } from "node:child_process";
@@ -119,6 +121,24 @@ for (const manifest of [".claude-plugin", ".codex-plugin", ".cursor-plugin"].map
   if (fs.existsSync(manifest) && "hooks" in JSON.parse(read(manifest))) {
     problems.push(`${rel(manifest)} names hooks: the listed plugin must stay hook-free`);
   }
+}
+
+// Claude Code keeps one of two plugin servers at the same URL, so koalafix-auto's copy (the one whose helper sends the
+// hooks' sign-in) must point exactly where the koalafix plugin's does, or both would connect and every tool show
+// twice. Its helper must be a copied script run with --user, and the listed plugin must run none.
+const listedServer = JSON.parse(read(path.join(listed, ".mcp.json"))).mcpServers?.koalafix;
+const autoManifest = path.join(root, "plugins", "koalafix-auto", ".claude-plugin", "plugin.json");
+const autoServer = JSON.parse(read(autoManifest)).mcpServers?.koalafix;
+if (autoServer === undefined || autoServer.url !== listedServer?.url) {
+  problems.push(`${rel(autoManifest)} must declare the koalafix server at the koalafix plugin's URL (${listedServer?.url})`);
+} else {
+  const helper = /^node "\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/scripts\/([a-z-]+\.mjs)" --user$/.exec(String(autoServer.headersHelper));
+  if (helper === null || !fs.existsSync(path.join(scripts, helper[1]))) {
+    problems.push(`${rel(autoManifest)}: the koalafix server's headersHelper must run a copied hook script with --user`);
+  }
+}
+if (files.some((file) => rel(file).startsWith("plugins/koalafix/") && /\.json$/.test(file) && read(file).includes("headersHelper"))) {
+  problems.push("plugins/koalafix names a headersHelper: the listed plugin must run nothing on the machine");
 }
 
 if (problems.length > 0) {

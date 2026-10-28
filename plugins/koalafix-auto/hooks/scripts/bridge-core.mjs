@@ -15,7 +15,7 @@
 // fix. stdout carries protocol only; problems go to stderr.
 
 import { isRecord, messageOf, redact } from "./connect.mjs";
-import { findConfig, isHosted, mcpEndpoint, readToken } from "./project.mjs";
+import { findConfig, mcpEndpoint, readToken, serverUrlOf } from "./project.mjs";
 
 /** A reply larger than this is refused rather than buffered (the same cap the hooks put on a stdio line). */
 export const MAX_MESSAGE_CHARS = 4 * 1024 * 1024;
@@ -25,16 +25,13 @@ export const REQUEST_TIMEOUT_MS = 120_000;
 export const UNAUTHORIZED_CODE = -32001;
 
 /**
- * The server and credential for a project folder: its `.kalibrate/config.json` must be hosted, and a token must exist
- * for exactly that server. Throws with the fix in words otherwise.
+ * The server and credential for a project folder: its `.kalibrate/config.json` must name the server, and a token must
+ * exist for exactly that server. Throws with the fix in words otherwise.
  * @param {string} root the absolute project folder
  */
 export function resolveBridgeTarget(root, env = process.env) {
   const found = findConfig(root);
-  if (!isHosted(found.config) || typeof found.config.serverUrl !== "string" || found.config.serverUrl === "") {
-    throw new Error(".kalibrate/config.json is not in hosted mode with a serverUrl; run koalafix init --mode hosted");
-  }
-  const url = mcpEndpoint(found.config.serverUrl);
+  const url = mcpEndpoint(serverUrlOf(found.config));
   const token = readToken(found, env);
   if (token === "") {
     const origin = new URL(url).origin;

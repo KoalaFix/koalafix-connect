@@ -23,8 +23,18 @@ import path from "node:path";
 import { captureReason, capturing, fetchSpaces, isSpacesPage, memberSlugs, pickSpace, projectSlugs } from "./capture.mjs";
 import { pickedSpace } from "./spaces.mjs";
 
-/** The tools the last pass may call: the plugin's server, then a `koalafix init` project's. */
-export const END_TOOLS = ["mcp__plugin_koalafix_koalafix__remember", "mcp__plugin_koalafix_koalafix__recall", "mcp__koalafix__remember", "mcp__koalafix__recall"];
+/**
+ * The tools the last pass may call: the koalafix-auto plugin's copy of the server, the koalafix plugin's (whichever of
+ * the two Claude Code keeps), then a `koalafix init` project's.
+ */
+export const END_TOOLS = [
+  "mcp__plugin_koalafix-auto_koalafix__remember",
+  "mcp__plugin_koalafix-auto_koalafix__recall",
+  "mcp__plugin_koalafix_koalafix__remember",
+  "mcp__plugin_koalafix_koalafix__recall",
+  "mcp__koalafix__remember",
+  "mcp__koalafix__recall",
+];
 
 /** The most turns the last pass may take. */
 export const END_MAX_TURNS = 8;
