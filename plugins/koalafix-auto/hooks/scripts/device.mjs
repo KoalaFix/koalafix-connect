@@ -113,8 +113,17 @@ async function post(url, body, deadlineAt, fetchFn) {
   return { status: response.status, ok: response.ok, body: json };
 }
 
-function showText(pending) {
-  return `KoalaFix team memory is installed but not signed in on this machine. Show the user this link and code, and ask them to approve it: ${pending.uri} (code ${pending.userCode}). Team memory turns on by itself once they approve; nothing else is needed.`;
+/**
+ * What the model shows the person for a pending sign-in. In Claude Code the koalafix-auto plugin's copy of the server
+ * sends this same sign-in (headers.mjs --user), but it connected at session start, before the approval, so it picks
+ * the sign-in up when it next connects. Other clients sign their KoalaFix tools in on their own.
+ */
+function showText(pending, client) {
+  const after =
+    client === "claude-code"
+      ? "Team memory turns on by itself once they approve. The KoalaFix tools connected before the approval, so they pick it up in the next session, or now once the user reconnects koalafix in /mcp."
+      : "Once they approve, the hooks turn on by themselves; the KoalaFix tools have their own sign-in the first time they are used.";
+  return `KoalaFix team memory is installed but not signed in on this machine. Show the user this link and code, and ask them to approve it: ${pending.uri} (code ${pending.userCode}). ${after}`;
 }
 
 /**
@@ -134,7 +143,7 @@ export async function signInStep({ env = process.env, client, deadlineAt, start,
       return { signedIn: true, text: null };
     }
     if (polled.status === 428 || polled.body.error === "authorization_pending") {
-      return { signedIn: false, text: start ? showText(pending) : null };
+      return { signedIn: false, text: start ? showText(pending, client) : null };
     }
     fs.rmSync(file, { force: true });
   }
@@ -160,5 +169,5 @@ export async function signInStep({ env = process.env, client, deadlineAt, start,
     expiresAt: new Date(Date.now() + (typeof body.expires_in === "number" ? body.expires_in : 600) * 1000).toISOString(),
   };
   writePrivate(file, next);
-  return { signedIn: false, text: showText(next) };
+  return { signedIn: false, text: showText(next, client) };
 }
