@@ -12,19 +12,19 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { HttpStatusError, messageOf } from "./connect.mjs";
 import { credentialsPath, originOf } from "./credentials.mjs";
+import { assertOnline, markOffline, markOnline, originKey } from "./offline.mjs";
 import { apiBase } from "./project.mjs";
 import { kalibrateHome } from "./spool.mjs";
 
-export const DEFAULT_SERVER_URL = "https://mcp.koalafix.com";
+/**
+ * Thrown by `locateHook` for a plugin install with no credential where a browser can be shown: the hook may then sign
+ * in (signInStep). Where none can (client.mjs `canShowBrowser`), `locateHook` answers null and the hook is silent.
+ */
+export { NoCredentialError } from "./credentials.mjs";
 
-/** Thrown by `locateHook` for a plugin install with no credential: the hook may then sign in (signInStep). */
-export class NoCredentialError extends Error {
-  constructor() {
-    super("no KoalaFix credential on this machine; run koalafix login");
-    this.name = "NoCredentialError";
-  }
-}
+export const DEFAULT_SERVER_URL = "https://mcp.koalafix.com";
 
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -76,13 +76,33 @@ export function saveCredential(serverUrl, token, label, env = process.env, now =
   writePrivate(file, { version: 1, default: origin, servers });
 }
 
+/**
+ * One sign-in request, under the circuit breaker (offline.mjs) like every other server call: it fails at once while
+ * the server's cool-off runs, starts one when the server is down or answers 5xx, and clears it on any other answer.
+ */
 async function post(url, body, deadlineAt, fetchFn) {
-  const response = await fetchFn(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(Math.max(200, deadlineAt - Date.now())),
-  });
+  assertOnline(url);
+  const origin = originKey(url);
+  let response;
+  try {
+    response = await fetchFn(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(Math.max(200, deadlineAt - Date.now())),
+    });
+  } catch (error) {
+    if (!(error instanceof Error && error.name === "AbortError")) {
+      markOffline(origin, messageOf(error));
+    }
+    throw error;
+  }
+  if (response.status >= 500 && response.status !== 501) {
+    markOffline(origin, `HTTP ${response.status}`);
+    await response.body?.cancel();
+    throw new HttpStatusError(response.status, `${new URL(url).pathname} answered HTTP ${response.status}`);
+  }
+  markOnline(origin);
   let json = {};
   try {
     const parsed = await response.json();

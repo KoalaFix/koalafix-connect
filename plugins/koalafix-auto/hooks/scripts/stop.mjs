@@ -34,6 +34,7 @@ import { summarizeOpen } from "./format.mjs";
 import { appendSpool } from "./spool.mjs";
 import { backstopReason, leaseKey, leaseLive, readState, sessionIdOf, sessionKey, writeState } from "./wip.mjs";
 import { projectLabel } from "./label.mjs";
+import { keepModel, keptModel, provenanceMeta, transcriptModel } from "./provenance.mjs";
 import { attended, captureDue, captureEvery, captureReason, capturing, fetchSpaces, holdable, isSpacesPage, memberSlugs, pickSpace, projectSlugs } from "./capture.mjs";
 import { pickFromTranscript, pickedSpace, rememberPick, transcriptSize } from "./spaces.mjs";
 
@@ -61,7 +62,7 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
   }
   const { found, target } = located;
   project = found.root;
-  const sessionId = atSessionEnd || target.kind !== "http" ? null : sessionIdOf(input);
+  const sessionId = atSessionEnd ? null : sessionIdOf(input);
   const key = sessionId === null ? null : sessionKey(found.root, sessionId);
   let state = key === null ? null : readState(key, env);
   const now = Date.now();
@@ -83,17 +84,24 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
       }
     }
   }
-  // Started now so the read runs beside the handshake; only on a turn due a capture (checked first: cheaper).
+  // Started now so the read runs beside the tool calls; only on a turn due a capture (checked first: cheaper).
   const due = ended && captureDue(state, now, captureEvery(env)) && capturing(env, args.client, input);
   const spaces = due ? fetchSpaces(target, deadlineAt).catch(() => null) : null;
-  const session = afterAgent ? null : await connect(target, deadlineAt);
+  const session = afterAgent ? null : connect(target, deadlineAt);
+  // Claude Code's latest answer names the model now in use (a `/model` switch included): kept for the later hooks.
+  const answered = key === null || session === null ? null : transcriptModel(input.transcript_path);
+  if (answered !== null && answered !== keptModel(key, env)) {
+    keepModel(key, answered, env);
+  }
+  // The repo and model this session reports with its calls (provenance.mjs, KOA2-149).
+  const reported = session === null ? {} : provenanceMeta(found.root, input, key, env);
   // A plugin install restarts its lease only when the first prompt found it lands in this folder's space (KOA2-5).
   if (session !== null && state !== null && (found.user !== true || state.autoLease === true) && !leaseLive(state)) {
     const n = state.leases + 1;
     const what = projectLabel(found.root);
     const work = { action: "start", what, agent: { client: args.client }, idempotency_key: leaseKey(key, n) };
     try {
-      const started = (await callTool(session, "work", work, { [IDEMPOTENCY_META]: work.idempotency_key })).structured;
+      const started = (await callTool(session, "work", work, { [IDEMPOTENCY_META]: work.idempotency_key, ...reported })).structured;
       state = { ...state, lease: started?.lease ?? null, expiresAt: started?.expires_at ?? null, leases: n };
       writeState(key, state, env);
     } catch (error) {
@@ -123,7 +131,7 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
     state = { ...state, covered: state.turns, capturedAt: now, asked: asking ? choice.ask : state.asked, askedFrom };
     writeState(key, state, env);
   }
-  return session === null ? null : callTool(session, "open", OPEN_ARGS);
+  return session === null ? null : callTool(session, "open", OPEN_ARGS, reported);
 });
 let notice;
 if (outcome.ok) {

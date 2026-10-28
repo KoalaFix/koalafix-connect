@@ -14,23 +14,24 @@
 // - An acknowledgement ("ok", "continue") asks the server nothing. A lease that has ended is started again.
 // - The recall carries the person's prompt, so it is marked unlogged: the server keeps no query-log row and opens no
 //   gap item for it, as for the session brief (Part A 4.6, KOA2-42).
-// Hosted mode only: local mode starts a server process per call, which a per-prompt budget cannot afford; there the
-// session-start brief stands alone. It fails open: on any problem it adds nothing, prints one line on stderr and
-// exits 0. Budget 1.5 s (KALIBRATE_HOOK_BUDGET_MS overrides). Other clients pass `--client` and `--project`.
+// - Every call says which repo and model it came from in `_meta` (provenance.mjs, KOA2-149), on the same request.
+// It fails open: on any problem it adds nothing, prints one line on stderr and exits 0. Budget 1.5 s (KALIBRATE_HOOK_BUDGET_MS overrides). Other clients pass `--client` and `--project`.
 // No MCP handshake (KOA2-64): each call is one `tools/call` request, sent alone with the `MCP-Protocol-Version`
 // header, so a later prompt is one HTTP request and the first is two in parallel (a plugin install's first adds its
 // spaces read, beside the recall, before the lease start). A server that wants the handshake
 // gets it once, and the hook says so on stderr.
 
-import { BUDGETS, IDEMPOTENCY_META, UNLOGGED_META, budgetFrom, callTool, connectStateless, finish, messageOf, runWithBudget } from "./connect.mjs";
+import { BUDGETS, IDEMPOTENCY_META, UNLOGGED_META, budgetFrom, callTool, connect, finish, messageOf, runWithBudget } from "./connect.mjs";
 import { readHookInput } from "./project.mjs";
 import { locateHook, parseHookArgs, promptOutput } from "./client.mjs";
 import { NoCredentialError, signInStep } from "./device.mjs";
 import { firstBlock, isTrivial, recallQuery, leaseKey, leaseLive, newsBlock, promptOf, readState, restartedLine, sessionIdOf, sessionKey, writeState } from "./wip.mjs";
 import { projectLabel } from "./label.mjs";
 import { fetchSpaces } from "./capture.mjs";
+import { ServerOfflineError } from "./offline.mjs";
 import { autoLeaseSpace } from "./lease-space.mjs";
 import { pickedSpace } from "./spaces.mjs";
+import { provenanceMeta } from "./provenance.mjs";
 
 /** How many results one recall asks for: enough for a first block, few enough to stay inside the budget. */
 const RECALL_LIMIT = 5;
@@ -42,10 +43,10 @@ let notice = "";
 let session = null;
 
 /** Starts lease number `n` for this session, returning the `WorkResult` or null when the server refused it. */
-async function startLease(session, key, n, what, client) {
+async function startLease(session, key, n, what, client, reported) {
   const work = { action: "start", what, agent: { client }, idempotency_key: leaseKey(key, n) };
   try {
-    return (await callTool(session, "work", work, { [IDEMPOTENCY_META]: leaseKey(key, n) })).structured ?? null;
+    return (await callTool(session, "work", work, { [IDEMPOTENCY_META]: leaseKey(key, n), ...reported })).structured ?? null;
   } catch (error) {
     notice += `koalafix: prompt hook could not start the WIP lease: ${messageOf(error)}\n`;
     return null;
@@ -75,7 +76,10 @@ async function leaseAllowed(target, root, deadlineAt) {
   try {
     return autoLeaseSpace(await fetchSpaces(target, deadlineAt), root, pickedSpace(root, env)) !== null;
   } catch (error) {
-    notice += `koalafix: prompt hook could not read your spaces, so it started no WIP lease yet: ${messageOf(error)}\n`;
+    // A server in its cool-off already gets the hook's one "skipped" line; saying it twice is noise.
+    if (!(error instanceof ServerOfflineError)) {
+      notice += `koalafix: prompt hook could not read your spaces, so it started no WIP lease yet: ${messageOf(error)}\n`;
+    }
     return null;
   }
 }
@@ -110,21 +114,19 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.prompt), async (dead
     return;
   }
   const { found, target } = located;
-  if (target.kind !== "http") {
-    return;
-  }
   const key = sessionKey(found.root, sessionId);
   // A project folder `koalafix init` tied to a space always gets an automatic lease, named when one is started; a
   // plugin install gets one when its first prompt found the lease would land in this folder's space.
   const project = found.user !== true;
   const state = readState(key, env);
-  session = connectStateless(target, deadlineAt);
+  session = connect(target, deadlineAt);
   const about = recallQuery(prompt);
-  const recall = callTool(session, "recall", { about, limit: RECALL_LIMIT }, { [UNLOGGED_META]: true }).then((result) => result.structured ?? null);
+  const reported = provenanceMeta(found.root, input, key, env);
+  const recall = callTool(session, "recall", { about, limit: RECALL_LIMIT }, { [UNLOGGED_META]: true, ...reported }).then((result) => result.structured ?? null);
   // The lease's calls stop short of the budget. A start still unanswered then is not counted, so the next try sends
   // the same idempotency key and gets the same lease back rather than leaving a second one open.
   const leaseBy = deadlineAt - LEASE_CUTOFF_MS;
-  const leaseIf = (ok, n) => (ok === true ? settleBy(startLease(session, key, n, projectLabel(found.root), args.client), leaseBy, LATE) : null);
+  const leaseIf = (ok, n) => (ok === true ? settleBy(startLease(session, key, n, projectLabel(found.root), args.client, reported), leaseBy, LATE) : null);
   if (state === null) {
     const allowed = project ? Promise.resolve(true) : leaseAllowed(target, found.root, leaseBy);
     const [memory, started, autoLease] = await Promise.all([recall, allowed.then((ok) => leaseIf(ok, 1)), allowed]);
