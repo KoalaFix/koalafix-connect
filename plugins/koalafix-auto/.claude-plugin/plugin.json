@@ -2,7 +2,7 @@
   "name": "koalafix-auto",
   "displayName": "KoalaFix automatic memory",
   "version": "0.4.0",
-  "description": "Makes KoalaFix automatic in Claude Code and Cowork: the team brief and current decisions at session start, recall on each prompt, a warning before the agent edits a file a teammate has checked in on, work in progress started and closed for you, one browser sign-in on first use for the hooks and the KoalaFix tools alike. Installs the koalafix plugin with it. Sends each prompt (keys and tokens taken out, never logged) and the paths of files it names or the session edits to your KoalaFix server; teammates see your project, branch and those paths. Needs Node.js 22 or later on the machine.",
+  "description": "Makes KoalaFix automatic in Claude Code and Cowork: the team brief and current decisions at session start, recall on each prompt, a warning before the agent edits a file a teammate has checked in on, work in progress started and closed for you, one browser sign-in on first use for the hooks and the KoalaFix tools alike. In Claude Code it installs the koalafix plugin with it; on claude.ai and in Cowork, add koalafix too. Sends each prompt (keys and tokens taken out, never logged) and the paths of files it names or the session edits to your KoalaFix server; teammates see your project, branch and those paths. Needs Node.js 22 or later on the machine.",
   "author": {
     "name": "KoalaFix",
     "url": "https://koalafix.com"

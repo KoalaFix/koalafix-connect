@@ -1,0 +1,19 @@
+{
+  "name": "koalafix-connect",
+  "owner": {
+    "name": "KoalaFix"
+  },
+  "metadata": {
+    "description": "One memory for every AI tool on your team. Facts show who checked them and when."
+  },
+  "plugins": [
+    {
+      "name": "koalafix-copilot",
+      "source": "./plugins/koalafix-copilot",
+      "description": "KoalaFix team memory for GitHub Copilot: the MCP server, the session routine, and hooks for the team brief at session start and a recall on each prompt. Hooks need Node.js 22 or later.",
+      "version": "0.1.0",
+      "category": "development",
+      "tags": ["memory", "team", "hooks"]
+    }
+  ]
+}

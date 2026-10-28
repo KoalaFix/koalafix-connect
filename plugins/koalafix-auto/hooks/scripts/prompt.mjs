@@ -11,6 +11,8 @@
 //   server would file it in is this folder's space (lease-space.mjs, KOA2-5); the answer holds for the session.
 // - On later prompts it calls `recall` again and adds only what this session has not been shown (wip.mjs). Most
 //   prompts add nothing, so the model does not learn to skip the block.
+// - Caps (KOA2-138): the first block 1,500 characters, a later prompt's news 1,000, the whole session 6,000 (about
+//   1,500 tokens). Past that only collision warnings go in, and one line says the news stopped.
 // - An acknowledgement ("ok", "continue") asks the server nothing. A lease that has ended is started again.
 // - The recall carries the person's prompt, so it is marked unlogged: the server keeps no query-log row and opens no
 //   gap item for it, as for the session brief (Part A 4.6, KOA2-42).
@@ -25,7 +27,7 @@ import { BUDGETS, IDEMPOTENCY_META, ToolError, UNLOGGED_META, budgetFrom, callTo
 import { readHookInput } from "./project.mjs";
 import { locateHook, parseHookArgs, promptOutput } from "./client.mjs";
 import { NoCredentialError, signInStep } from "./device.mjs";
-import { firstBlock, isTrivial, labelProject, recallQuery, leaseKey, leaseLive, newsBlock, promptOf, readState, restartedLine, sessionIdOf, sessionKey, writeState } from "./wip.mjs";
+import { MAX_NEWS_CHARS, MAX_SESSION_CHARS, SPENT_LINE, firstBlock, isTrivial, labelProject, recallQuery, leaseKey, leaseLive, newsBlock, promptOf, readState, restartedLine, sessionIdOf, sessionKey, writeState } from "./wip.mjs";
 import { projectLabel } from "./label.mjs";
 import { fetchSpaces } from "./capture.mjs";
 import { ServerOfflineError } from "./offline.mjs";
@@ -166,7 +168,7 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.prompt), async (dead
     const work = started === LATE ? null : started;
     const block = firstBlock(memory, work, null, paths, projectName);
     context = block.text;
-    writeState(key, { lease: work?.lease ?? null, expiresAt: work?.expires_at ?? null, leases: started === LATE ? 0 : 1, shown: block.shown, nudged: false, autoLease }, env);
+    writeState(key, { lease: work?.lease ?? null, expiresAt: work?.expires_at ?? null, leases: started === LATE ? 0 : 1, shown: block.shown, nudged: false, autoLease, injected: context.length, spent: false }, env);
     return;
   }
   // A plugin install whose spaces could not be read on the first prompt reads them again, until it knows.
@@ -176,11 +178,18 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.prompt), async (dead
   const work = started === LATE ? null : started;
   const known = { ...state, autoLease: project ? state.autoLease : autoLease };
   const next = work === null ? known : { ...known, lease: work.lease ?? null, expiresAt: work.expires_at ?? null, leases: state.leases + 1 };
-  const news = newsBlock(memory, next, paths, projectName);
   const restarted = work === null ? null : restartedLine(work);
-  const parts = [restarted, news?.text ?? null].filter((part) => part !== null);
+  // The session's budget (KOA2-138): news fits in what is left of it after a restarted lease's line, collisions go out
+  // regardless, and the first prompt whose news it holds back says so, once; after that no news at all. What was held
+  // back is not marked shown, so recall() still finds it new.
+  const room = state.spent ? 0 : MAX_SESSION_CHARS - state.injected - (restarted === null ? 0 : restarted.length + 1);
+  const news = newsBlock(memory, next, paths, projectName, room);
+  const uncut = room >= MAX_NEWS_CHARS ? news : newsBlock(memory, next, paths, projectName);
+  const kept = new Set(news?.shown ?? []);
+  const spent = !state.spent && (uncut?.shown ?? []).some((signature) => !kept.has(signature)) ? SPENT_LINE : null;
+  const parts = [restarted, news?.text ?? null, spent].filter((part) => part !== null);
   context = parts.length === 0 ? null : parts.join("\n");
-  writeState(key, { ...next, shown: [...next.shown, ...(news?.shown ?? [])] }, env);
+  writeState(key, { ...next, shown: [...next.shown, ...(news?.shown ?? [])], injected: state.injected + (context?.length ?? 0), spent: state.spent || spent !== null }, env);
 });
 if (session?.fallback != null) {
   notice += `koalafix: prompt hook fell back to the MCP handshake: ${session.fallback}\n`;

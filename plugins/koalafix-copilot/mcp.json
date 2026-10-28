@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "koalafix": {
+      "type": "streamable-http",
+      "url": "https://mcp.koalafix.com/mcp"
+    }
+  }
+}

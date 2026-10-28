@@ -21,6 +21,18 @@ import { kalibrateHome } from "./spool.mjs";
 /** The most characters one injected block may hold: about 400 tokens. */
 export const MAX_BLOCK_CHARS = 1500;
 
+/** The most characters a later prompt's news may hold: about 250 tokens (KOA2-138). */
+export const MAX_NEWS_CHARS = 1000;
+
+/**
+ * The most characters the prompt hook injects in one session, the first block included: about 1,500 tokens (KOA2-138).
+ * Past it a later prompt gets only collision warnings and a restarted lease's line, and one line says so, once.
+ */
+export const MAX_SESSION_CHARS = 6000;
+
+/** The one line a session gets when its share of team-memory news is spent (KOA2-138). */
+export const SPENT_LINE = "KoalaFix: this session has had its share of team-memory news (about 1,500 tokens), so the hook adds no more. Call recall() when you need what is new.";
+
 /** How many new fact keys one later prompt may add. */
 export const MAX_NEW_FACTS = 3;
 
@@ -132,6 +144,9 @@ export function readState(key, env = process.env) {
       asked: Array.isArray(parsed.asked) ? parsed.asked.filter((slug) => typeof slug === "string") : null,
       // The transcript's size when it asked: the pick is looked for only after it.
       askedFrom: Number.isInteger(parsed.askedFrom) && parsed.askedFrom >= 0 ? parsed.askedFrom : 0,
+      // The characters the prompt hook has injected this session, and whether the spent line went out (KOA2-138).
+      injected: Number.isInteger(parsed.injected) && parsed.injected >= 0 ? parsed.injected : 0,
+      spent: parsed.spent === true,
     };
   } catch {
     return null;
@@ -197,7 +212,8 @@ export const COLLISION_WARNING =
  * section's header is written only together with its first kept line, so no header stands empty (an empty "Teammates
  * working:" would read as nobody).
  */
-function packer(budget) {
+function packer(limit) {
+  let budget = limit;
   const lines = [];
   const kept = [];
   let size = 0;
@@ -206,6 +222,10 @@ function packer(budget) {
     /** The header the next kept line goes under; null for lines with no header. */
     section(header) {
       pending = header;
+    },
+    /** Lowers the budget for the lines still to come to `limit`, never below what is already kept. */
+    cap(limit) {
+      budget = Math.max(size, Math.min(budget, limit));
     },
     add(line, ...signatures) {
       const adding = pending === null ? [line] : [pending, line];
@@ -225,9 +245,9 @@ function packer(budget) {
   };
 }
 
-/** What is left of the block's cap for team memory once KoalaFix's own lines and the frame are counted. */
-function memoryBudget(guidance) {
-  return MAX_BLOCK_CHARS - guidance.join("\n").length - 1 - FRAME_CHARS;
+/** What is left of a block's cap (`max` characters) for team memory once KoalaFix's own lines and the frame are counted. */
+function memoryBudget(guidance, max = MAX_BLOCK_CHARS) {
+  return max - guidance.join("\n").length - 1 - FRAME_CHARS;
 }
 
 /** A lease's paths, without one on the whole tree: that overlaps every file, so it warns of nothing in particular. */
@@ -315,14 +335,15 @@ export function firstBlock(recall, work, ownLease = null, paths = [], project = 
  * A later prompt's block: only what this session has not been shown, as team memory inside the frame. First a
  * teammate's lease on the paths this prompt is about, once per lease, even one shown before as plain work; then a fact
  * whose state changed, a fact key never shown (three at most), changes since the person last read a key, and
- * teammates' leases not shown before. Notes never are. Returns null when there is no news.
+ * teammates' leases not shown before. Notes never are. Cut to 1,000 characters, and everything after the collisions to
+ * `room` characters, what is left of the session's budget (KOA2-138). Returns null when there is no news.
  */
-export function newsBlock(recall, state, paths = [], project = null) {
+export function newsBlock(recall, state, paths = [], project = null, room = MAX_NEWS_CHARS) {
   const seen = new Set(state.shown);
   const knownKeys = new Set(state.shown.filter((entry) => entry.startsWith("f:")).map((entry) => entry.slice(2, entry.lastIndexOf(":"))));
   const collisions = list(recall, "working_on").filter((entry) => entry.lease !== state.lease && !seen.has(`x:${entry.lease}`) && onPaths(entry, paths, project));
   const guidance = ["KoalaFix update (added by a hook: only what is new since this session's last note):"];
-  const block = packer(memoryBudget(collisions.length > 0 ? [...guidance, COLLISION_WARNING] : guidance));
+  const block = packer(memoryBudget(collisions.length > 0 ? [...guidance, COLLISION_WARNING] : guidance, MAX_NEWS_CHARS));
   let warned = false;
   for (const entry of collisions) {
     if (block.add(collisionLine(entry, paths), `x:${entry.lease}`, `w:${entry.lease}`)) {
@@ -333,6 +354,8 @@ export function newsBlock(recall, state, paths = [], project = null) {
   if (warned) {
     guidance.push(COLLISION_WARNING);
   }
+  // A collision warns before an edit, so it goes out whatever the session has spent; the rest fits in what is left.
+  block.cap(memoryBudget(guidance, Math.min(room, MAX_NEWS_CHARS)));
   let newKeys = 0;
   for (const fact of list(recall, "facts")) {
     const signature = `f:${fact.key}:${fact.state}`;
