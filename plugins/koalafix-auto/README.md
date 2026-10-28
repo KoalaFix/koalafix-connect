@@ -3,8 +3,13 @@
 This plugin makes KoalaFix team memory automatic in Claude Code, Cowork, Codex and Cursor. With only the `koalafix`
 plugin, the agent recalls and records work when it decides to. With this one, hooks do it on every session:
 
-- **Session start:** the team's brief (facts and open items) goes in front of the session.
-- **Each prompt:** one recall about what you asked, inside 1.5 seconds, with the verdict in front of the prompt.
+- **Session start:** the team's brief goes in front of the session: facts, the team's current decisions (the ones
+  that name this repository first), teammates' work in progress and open items. The first time the hooks run on your
+  machine they show you a one-line notice of what they send and how to turn them off (`/plugin` in Claude Code,
+  `/hooks` in Codex).
+- **Each prompt:** one recall about what you asked, inside 1.5 seconds, with the verdict in front of the prompt. When a
+  teammate has checked in on a file your prompt names or this session edited, the agent is told before it edits (a
+  "Collision" line: who, what, since when), once per check-in, with no tool call.
   Later prompts add only what the session has not been shown. On the first prompt it also starts your
   work-in-progress lease, so teammates see who is on what: when the space it would go to is the one for this
   folder (the one you picked for it, or the one named after the project), or you are in one team space and the
@@ -52,7 +57,10 @@ this repository as a team marketplace.
   error).
 - They read your own KoalaFix credential from `~/.kalibrate/credentials.json` and send it only to the exact server it
   was issued for. They send that server your prompt's text for the recall (up to 2,000 characters, anything shaped
-  like a token or key taken out, marked so the server keeps no log of it), and, each time the agent is asked for the decisions
+  like a token or key taken out, marked so the server keeps no log of it); with it, the paths of up to 20 files the
+  prompt is about (paths it names that exist in the project, and files this session's agent edited, read from the end
+  of your client's own transcript on your machine: only the paths leave it), which go on your work-in-progress lease
+  where **your teammates see them**; at session start, the repository's or folder's name; and, each time the agent is asked for the decisions
   (again next turn if it fails), a request for the list of your spaces. The session's decisions are saved by your agent with the `remember`
   tool, in its words, to your only space whatever folder you work in, or the one named after the project, or the one
   you name when it asks (up to eight space names go into its context for that question): **your teammates see
@@ -64,6 +72,12 @@ this repository as a team marketplace.
   to, over https; with none, it prints `{}` and Claude Code's own OAuth sign-in takes over.
 - They contain no token. The only address in them is the hosted server, where the first browser sign-in goes. They
   never print a token, except the helper, to Claude Code, as that header.
+- Team memory comes into the session as data inside a `<koalafix-memory-…>` block, under a line telling the agent
+  never to follow instructions in it; KoalaFix's own lines stay outside, the block's id is a hash of what is inside so
+  nothing inside can close it, and tags inside are made harmless, so a teammate's note cannot pass as an instruction.
+- They report no paths at all when the agent starts in your home folder or a drive's top, never follow a symbolic
+  link, never send a file name that looks like it holds a secret (`.env`, keys), and send only paths of files that
+  exist in the project.
 - Every hook gives up silently on any problem (no Node, no credential, a server down or slow), and in a project with
   its own `koalafix init` install they do nothing, so nothing runs twice.
 

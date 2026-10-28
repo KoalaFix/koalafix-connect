@@ -108,7 +108,7 @@ export function budgetFrom(env, fallbackMs) {
   return Number.isFinite(value) && value > 0 ? value : fallbackMs;
 }
 
-/** Every request in flight, by its controller, with the origin it went to. */
+/** Every request in flight, by its controller, with the origin it went to (null: its slowness starts no cool-off). */
 const aborters = new Map();
 /** Origins that answered in this run: a budget that runs out after an answer does not make that server "down". */
 const answered = new Set();
@@ -119,7 +119,7 @@ const answered = new Set();
  */
 function abortAll(expired = false) {
   for (const [controller, origin] of aborters) {
-    if (expired && !answered.has(origin)) {
+    if (expired && origin !== null && !answered.has(origin)) {
       markOffline(origin, "no answer inside the hook's budget");
     }
     controller.abort();
@@ -170,11 +170,11 @@ export function parseRpcBody(text, contentType, id) {
  * A fetch inside the budget that abortAll can abort; redirects are refused, so the token stays on its host. It fails
  * at once while the server's cool-off runs, starts one when the server is down, and clears it on any answer below 500.
  */
-async function fetchWithin(url, init, deadlineAt) {
+async function fetchWithin(url, init, deadlineAt, slowIsDown = true) {
   assertOnline(url);
   const origin = originKey(url);
   const controller = new AbortController();
-  aborters.set(controller, origin);
+  aborters.set(controller, slowIsDown ? origin : null);
   try {
     const response = await fetch(url, {
       ...init,
@@ -190,7 +190,8 @@ async function fetchWithin(url, init, deadlineAt) {
     return response;
   } catch (error) {
     // AbortError is abortAll's: it records a budget that ran out itself, and a plain abort after the work is no failure.
-    if (!(error instanceof Error && error.name === "AbortError") && !answered.has(origin)) {
+    const slow = error instanceof Error && error.name === "TimeoutError";
+    if (!(error instanceof Error && error.name === "AbortError") && !(slow && !slowIsDown) && !answered.has(origin)) {
       markOffline(origin, messageOf(error));
     }
     throw error;
@@ -289,12 +290,14 @@ export function connect(target, deadlineAt) {
 
 /**
  * One GET on the read API (`route` starts `/api/v1/`), under the budget and the breaker like every other hook request:
- * the parsed JSON body, or HttpStatusError when the server answers anything but 2xx.
+ * the parsed JSON body, or HttpStatusError when the server answers anything but 2xx. `slowIsDown: false` keeps a read
+ * that runs out of time from starting the cool-off the other hooks share (the first-edit gate's short budget); a
+ * refused connection or a 5xx still starts it.
  */
-export async function readApi(target, route, deadlineAt) {
+export async function readApi(target, route, deadlineAt, { slowIsDown = true } = {}) {
   const name = `GET ${route.split("?")[0]}`;
   const headers = { accept: "application/json", authorization: `Bearer ${target.token}`, "user-agent": userAgentOf(target) };
-  const response = await fetchWithin(`${target.api}${route}`, { method: "GET", headers }, deadlineAt);
+  const response = await fetchWithin(`${target.api}${route}`, { method: "GET", headers }, deadlineAt, slowIsDown);
   if (!response.ok) {
     await response.body?.cancel();
     throw new HttpStatusError(response.status, `${name} answered HTTP ${response.status}`);
@@ -306,9 +309,14 @@ export async function readApi(target, route, deadlineAt) {
   }
 }
 
-/** The session brief (Part A 4.6) over the read API: `GET <server>/api/v1/brief` answers `{ as_of, brief, tokens }`. */
-export async function fetchBrief(target, deadlineAt) {
-  const body = await readApi(target, "/api/v1/brief", deadlineAt);
+/**
+ * The session brief (Part A 4.6) over the read API: `GET <server>/api/v1/brief` answers `{ as_of, brief, tokens }`.
+ * `repo` (provenance.mjs `reportedRepo`) puts the team decisions that name it first (ADR-0041); a server from before
+ * ignores it.
+ */
+export async function fetchBrief(target, deadlineAt, repo = null) {
+  const route = repo === null ? "/api/v1/brief" : `/api/v1/brief?repo=${encodeURIComponent(repo)}`;
+  const body = await readApi(target, route, deadlineAt);
   if (!isRecord(body) || typeof body.brief !== "string") {
     throw new Error("GET /api/v1/brief answered no brief");
   }
@@ -340,7 +348,7 @@ export async function callTool(session, name, args, meta) {
  * Runs `work(deadlineAt)` inside a wall-clock budget. Resolves to { ok: true, value } or { ok: false, error }, and
  * always aborts any request still in flight. A late failure of work that already lost the race is swallowed.
  */
-export async function runWithBudget(budgetMs, work) {
+export async function runWithBudget(budgetMs, work, { slowIsDown = true } = {}) {
   const deadlineAt = Date.now() + budgetMs;
   let timer;
   const expired = Symbol("expired");
@@ -357,7 +365,7 @@ export async function runWithBudget(budgetMs, work) {
     return { ok: false, error: error instanceof Error && error.name === "TimeoutError" ? new BudgetExpiredError(budgetMs) : error };
   } finally {
     clearTimeout(timer);
-    abortAll(ranOut);
+    abortAll(ranOut && slowIsDown);
   }
 }
 

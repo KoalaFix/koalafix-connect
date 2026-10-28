@@ -236,12 +236,16 @@ export function withClient(target, client) {
   return { ...target, clientInfo: clientInfoFor(client) };
 }
 
-/** What session-start prints for a brief: Cursor's `additional_context`, everyone else's `hookSpecificOutput`. */
-export function sessionStartOutput(client, context) {
+/**
+ * What session-start prints for a brief: Cursor's `additional_context`, everyone else's `hookSpecificOutput`. A
+ * `notice` for the person (install-notice.mjs) rides as `systemMessage`, which the client shows to them, not the model.
+ */
+export function sessionStartOutput(client, context, notice = null) {
   if (client === "cursor") {
     return `${JSON.stringify({ additional_context: context })}\n`;
   }
-  return `${JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: context } })}\n`;
+  const shown = notice === null ? {} : { systemMessage: notice };
+  return `${JSON.stringify({ ...shown, hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: context } })}\n`;
 }
 
 /** Each client's prompt-submit event, named in its `hookSpecificOutput`. */
