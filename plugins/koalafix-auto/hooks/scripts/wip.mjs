@@ -4,14 +4,18 @@
 // What the prompt and session-end hooks decide, kept apart from the scripts so it can be tested without running one.
 // The hook, not the model, starts the session's WIP lease and puts team memory in front of the first real prompt;
 // after that it adds only what this session has not been shown (a fact in a new state, a new fact key, a change since
-// the person last read it, a teammate's lease). Notes are shown once, on the first prompt, never as news. The inputs
-// are the real tools' shapes: `RecallResult` and `WorkResult` (packages/core/src/contract/tools-io.ts).
+// the person last read it, a teammate's lease). Notes are shown once, on the first prompt, never as news. A teammate's
+// lease on the files the prompt is about is pushed as a collision warning, once (ADR-0041). Team memory always sits
+// inside the data frame (memory-frame.mjs); KoalaFix's own lines stay outside it. The inputs are the real tools'
+// shapes: `RecallResult` and `WorkResult` (packages/core/src/contract/tools-io.ts).
 // Plain ESM, Node 22 APIs only, no dependencies.
 
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { redact } from "./connect.mjs";
+import { FRAME_CHARS, framed } from "./memory-frame.mjs";
+import { isWholeTree, overlaps } from "./paths.mjs";
 import { kalibrateHome } from "./spool.mjs";
 
 /** The most characters one injected block may hold: about 400 tokens. */
@@ -181,27 +185,85 @@ function changeLine(change) {
   return `- ${str(change.key, 80)} changed ${str(change.changed_ago, 20)}: ${shownValue(change.was)} -> ${shownValue(change.now)}`;
 }
 
-/** Adds lines while they fit, recording each one's signature only when it is kept. */
-function packer(header) {
-  const lines = [header];
+/**
+ * What the hook says, outside the team memory, when a teammate's check-in overlaps the files the prompt is about
+ * (ADR-0041): pushed before the agent edits, instead of found only when it checks in itself.
+ */
+export const COLLISION_WARNING =
+  "Heads up from KoalaFix: a teammate has checked in on files this prompt is about (Collision below). Tell the person who and what before you edit those files.";
+
+/**
+ * Adds memory lines while they fit in `budget` characters, recording their signatures only when a line is kept. A
+ * section's header is written only together with its first kept line, so no header stands empty (an empty "Teammates
+ * working:" would read as nobody).
+ */
+function packer(budget) {
+  const lines = [];
   const kept = [];
-  let size = header.length;
+  let size = 0;
+  let pending = null;
   return {
-    add(line, signature) {
-      if (size + 1 + line.length > MAX_BLOCK_CHARS) {
+    /** The header the next kept line goes under; null for lines with no header. */
+    section(header) {
+      pending = header;
+    },
+    add(line, ...signatures) {
+      const adding = pending === null ? [line] : [pending, line];
+      const cost = adding.reduce((sum, text) => sum + text.length, 0) + adding.length - (lines.length === 0 ? 1 : 0);
+      if (size + cost > budget) {
         return false;
       }
-      lines.push(line);
-      size += 1 + line.length;
-      if (signature !== undefined) {
-        kept.push(signature);
-      }
+      lines.push(...adding);
+      size += cost;
+      pending = null;
+      kept.push(...signatures);
       return true;
     },
-    text: () => lines.join("\n"),
+    lines: () => lines,
     kept: () => kept,
-    count: () => lines.length - 1,
+    count: () => lines.length,
   };
+}
+
+/** What is left of the block's cap for team memory once KoalaFix's own lines and the frame are counted. */
+function memoryBudget(guidance) {
+  return MAX_BLOCK_CHARS - guidance.join("\n").length - 1 - FRAME_CHARS;
+}
+
+/** A lease's paths, without one on the whole tree: that overlaps every file, so it warns of nothing in particular. */
+function pathList(entry) {
+  return Array.isArray(entry?.paths) ? entry.paths.filter((path) => typeof path === "string" && !isWholeTree(path)) : [];
+}
+
+/**
+ * The project a hook-started lease's label names (label.mjs: "working in <repo> on <branch>", or "working in <folder>"),
+ * lower case; null for a label an agent wrote itself, which says nothing about its repository.
+ */
+export function labelProject(what) {
+  const match = /^working in (\S+?)(?: on \S.*)?$/.exec(typeof what === "string" ? what : "");
+  return match === null ? null : match[1].toLowerCase();
+}
+
+/**
+ * Whether a teammate's lease sits on one of the paths this prompt is about. Paths are relative to a repository, so a
+ * hook lease whose label names another project (`project` is this one's) is on another `package.json`, not this one.
+ */
+function onPaths(entry, paths, project) {
+  const theirs = labelProject(entry?.what);
+  if (project !== null && theirs !== null && theirs !== project) {
+    return false;
+  }
+  return paths.length > 0 && pathList(entry).some((path) => paths.some((mine) => overlaps(path, mine)));
+}
+
+/** "- Collision: harry (codex): <label> [w_9, ...] on <their paths>; this prompt: <the prompt's paths>". */
+function collisionLine(entry, paths) {
+  const theirs = pathList(entry).filter((path) => paths.some((mine) => overlaps(path, mine)));
+  const mine = paths.filter((path) => theirs.some((other) => overlaps(other, path)));
+  const shown = (some) => some.slice(0, 3).map((path) => str(path, 80)).join(", ");
+  const on = theirs.length === 0 ? "" : ` on ${shown(theirs)}`;
+  const prompt = mine.length === 0 ? "" : `; this prompt: ${shown(mine)}`;
+  return `- Collision: ${workingLine(entry).slice(2)}${on}${prompt}`;
 }
 
 function verdictHeader(recall) {
@@ -211,56 +273,66 @@ function verdictHeader(recall) {
 }
 
 /**
- * The first prompt's block: the verdict and its instruction, the lease the hook started, overlapping work, then
- * facts, notes and teammates' work, cut to 1,500 characters. `work` is null when the lease could not be started.
+ * The first prompt's block: the verdict and its instruction and the lease the hook started (KoalaFix's own lines),
+ * then the team memory inside the frame: collisions (the lease start's overlaps, and teammates' leases on the paths this
+ * prompt is about, in this project), facts, notes, teammates' work and changes, cut to 1,500 characters in all. The
+ * warning line goes out only with a collision line it can point at. `work` is null when the lease could not be started.
  * Returns the text and the signatures of everything it shows.
  */
-export function firstBlock(recall, work, ownLease = null) {
-  const block = packer(verdictHeader(recall));
+export function firstBlock(recall, work, ownLease = null, paths = [], project = null) {
+  const guidance = [verdictHeader(recall)];
   const lease = isRecord(work) && typeof work.lease === "string" ? work.lease : null;
   if (lease !== null) {
     const ends = typeof work.expires_at === "string" ? `, until ${work.expires_at}` : "";
-    block.add(`WIP: the hook started lease ${lease} for this task${ends}; the session-end hook closes it. If you finish sooner, work(done, lease: "${lease}") with the outcome.`);
+    guidance.push(`WIP: the hook started lease ${lease} for this task${ends}; the session-end hook closes it. If you finish sooner, work(done, lease: "${lease}") with the outcome.`);
   }
-  for (const overlap of list(work, "overlaps")) {
-    block.add(`Overlap: ${workingLine(overlap).slice(2)}`, `w:${overlap.lease}`);
+  const own = (entry) => entry.lease === lease || entry.lease === ownLease;
+  const found = [...list(work, "overlaps"), ...list(recall, "working_on")].filter((entry) => !own(entry) && onPaths(entry, paths, project));
+  const collisions = found.filter((entry, index) => found.findIndex((other) => other.lease === entry.lease) === index);
+  const block = packer(memoryBudget(collisions.length > 0 ? [...guidance, COLLISION_WARNING] : guidance));
+  const warned = collisions.filter((entry) => block.add(collisionLine(entry, paths), `x:${entry.lease}`, `w:${entry.lease}`)).length > 0;
+  block.section("Facts:");
+  for (const fact of list(recall, "facts")) {
+    block.add(factLine(fact), `f:${fact.key}:${fact.state}`);
   }
-  const facts = list(recall, "facts");
-  if (facts.length > 0) {
-    block.add("Facts:");
-    for (const fact of facts) {
-      block.add(factLine(fact), `f:${fact.key}:${fact.state}`);
-    }
+  block.section("Notes:");
+  for (const note of list(recall, "notes").slice(0, MAX_NOTES)) {
+    block.add(`- ${str(note.id, 20)}: ${str(note.preview, 160)}`, `n:${note.id}`);
   }
-  const notes = list(recall, "notes").slice(0, MAX_NOTES);
-  if (notes.length > 0) {
-    block.add("Notes:");
-    for (const note of notes) {
-      block.add(`- ${str(note.id, 20)}: ${str(note.preview, 160)}`, `n:${note.id}`);
-    }
+  const collided = new Set(collisions.map((entry) => entry.lease));
+  block.section("Teammates working:");
+  for (const entry of list(recall, "working_on").filter((entry) => !own(entry) && !collided.has(entry.lease))) {
+    block.add(workingLine(entry), `w:${entry.lease}`);
   }
-  const working = list(recall, "working_on").filter((entry) => entry.lease !== lease && entry.lease !== ownLease);
-  if (working.length > 0) {
-    block.add("Teammates working:");
-    for (const entry of working) {
-      block.add(workingLine(entry), `w:${entry.lease}`);
-    }
-  }
+  block.section(null);
   for (const change of list(recall, "since_you_last_read")) {
     block.add(changeLine(change), `c:${change.key}:${JSON.stringify(change.now ?? null)}`);
   }
-  return { text: block.text(), shown: block.kept() };
+  return { text: framed(warned ? [...guidance, COLLISION_WARNING] : guidance, block.lines()), shown: block.kept() };
 }
 
 /**
- * A later prompt's block: only what this session has not been shown. A fact whose key is known but whose state
- * changed is news; a fact key never shown is news (three at most); so are changes since the person last read a key
- * and teammates' leases not shown before. Notes never are. Returns null when there is no news.
+ * A later prompt's block: only what this session has not been shown, as team memory inside the frame. First a
+ * teammate's lease on the paths this prompt is about, once per lease, even one shown before as plain work; then a fact
+ * whose state changed, a fact key never shown (three at most), changes since the person last read a key, and
+ * teammates' leases not shown before. Notes never are. Returns null when there is no news.
  */
-export function newsBlock(recall, state) {
+export function newsBlock(recall, state, paths = [], project = null) {
   const seen = new Set(state.shown);
   const knownKeys = new Set(state.shown.filter((entry) => entry.startsWith("f:")).map((entry) => entry.slice(2, entry.lastIndexOf(":"))));
-  const block = packer("KoalaFix update (added by a hook: only what is new since this session's last note):");
+  const collisions = list(recall, "working_on").filter((entry) => entry.lease !== state.lease && !seen.has(`x:${entry.lease}`) && onPaths(entry, paths, project));
+  const guidance = ["KoalaFix update (added by a hook: only what is new since this session's last note):"];
+  const block = packer(memoryBudget(collisions.length > 0 ? [...guidance, COLLISION_WARNING] : guidance));
+  let warned = false;
+  for (const entry of collisions) {
+    if (block.add(collisionLine(entry, paths), `x:${entry.lease}`, `w:${entry.lease}`)) {
+      seen.add(`w:${entry.lease}`);
+      warned = true;
+    }
+  }
+  if (warned) {
+    guidance.push(COLLISION_WARNING);
+  }
   let newKeys = 0;
   for (const fact of list(recall, "facts")) {
     const signature = `f:${fact.key}:${fact.state}`;
@@ -287,7 +359,7 @@ export function newsBlock(recall, state) {
       block.add(workingLine(entry), signature);
     }
   }
-  return block.count() === 0 ? null : { text: block.text(), shown: block.kept() };
+  return block.count() === 0 ? null : { text: framed(guidance, block.lines()), shown: block.kept() };
 }
 
 /** The lease block for a later prompt whose lease had to be started again. */

@@ -21,17 +21,18 @@
 // spaces read, beside the recall, before the lease start). A server that wants the handshake
 // gets it once, and the hook says so on stderr.
 
-import { BUDGETS, IDEMPOTENCY_META, UNLOGGED_META, budgetFrom, callTool, connect, finish, messageOf, runWithBudget } from "./connect.mjs";
+import { BUDGETS, IDEMPOTENCY_META, ToolError, UNLOGGED_META, budgetFrom, callTool, connect, finish, messageOf, runWithBudget } from "./connect.mjs";
 import { readHookInput } from "./project.mjs";
 import { locateHook, parseHookArgs, promptOutput } from "./client.mjs";
 import { NoCredentialError, signInStep } from "./device.mjs";
-import { firstBlock, isTrivial, recallQuery, leaseKey, leaseLive, newsBlock, promptOf, readState, restartedLine, sessionIdOf, sessionKey, writeState } from "./wip.mjs";
+import { firstBlock, isTrivial, labelProject, recallQuery, leaseKey, leaseLive, newsBlock, promptOf, readState, restartedLine, sessionIdOf, sessionKey, writeState } from "./wip.mjs";
 import { projectLabel } from "./label.mjs";
 import { fetchSpaces } from "./capture.mjs";
 import { ServerOfflineError } from "./offline.mjs";
 import { autoLeaseSpace } from "./lease-space.mjs";
 import { pickedSpace } from "./spaces.mjs";
 import { provenanceMeta } from "./provenance.mjs";
+import { pathsMeta, sessionPaths } from "./paths.mjs";
 
 /** How many results one recall asks for: enough for a first block, few enough to stay inside the budget. */
 const RECALL_LIMIT = 5;
@@ -42,12 +43,27 @@ let context = null;
 let notice = "";
 let session = null;
 
-/** Starts lease number `n` for this session, returning the `WorkResult` or null when the server refused it. */
-async function startLease(session, key, n, what, client, reported) {
-  const work = { action: "start", what, agent: { client }, idempotency_key: leaseKey(key, n) };
+/**
+ * Starts lease number `n` for this session on `paths`, returning the `WorkResult` or null when the server refused it.
+ * The server's write guard is stricter than the hook's own filter, so a path it refuses costs the paths, never the
+ * lease: the start is tried once more without them, under its own idempotency key.
+ */
+async function startLease(session, key, n, what, client, reported, paths) {
+  const attempt = async (idempotency, withPaths) => {
+    const work = { action: "start", what, agent: { client }, idempotency_key: idempotency, ...(withPaths ? { paths } : {}) };
+    return (await callTool(session, "work", work, { [IDEMPOTENCY_META]: idempotency, ...reported })).structured ?? null;
+  };
   try {
-    return (await callTool(session, "work", work, { [IDEMPOTENCY_META]: leaseKey(key, n), ...reported })).structured ?? null;
+    return await attempt(leaseKey(key, n), paths.length > 0);
   } catch (error) {
+    if (paths.length > 0 && error instanceof ToolError && error.code === "guard_rejected") {
+      try {
+        return await attempt(`${leaseKey(key, n)}:bare`, false);
+      } catch (again) {
+        notice += `koalafix: prompt hook could not start the WIP lease: ${messageOf(again)}\n`;
+        return null;
+      }
+    }
     notice += `koalafix: prompt hook could not start the WIP lease: ${messageOf(error)}\n`;
     return null;
   }
@@ -81,6 +97,15 @@ async function leaseAllowed(target, root, deadlineAt) {
       notice += `koalafix: prompt hook could not read your spaces, so it started no WIP lease yet: ${messageOf(error)}\n`;
     }
     return null;
+  }
+}
+
+/** The files the prompt is about (paths.mjs), without one that holds anything shaped like a credential; none on a failure. */
+function promptFiles(prompt, input, root) {
+  try {
+    return sessionPaths({ prompt, transcriptPath: input?.transcript_path, root }).filter((path) => recallQuery(path) === path);
+  } catch {
+    return [];
   }
 }
 
@@ -122,16 +147,24 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.prompt), async (dead
   session = connect(target, deadlineAt);
   const about = recallQuery(prompt);
   const reported = provenanceMeta(found.root, input, key, env);
-  const recall = callTool(session, "recall", { about, limit: RECALL_LIMIT }, { [UNLOGGED_META]: true, ...reported }).then((result) => result.structured ?? null);
+  // The files this prompt is about (ADR-0041), on the recall and on a lease start: the server lists a teammate's
+  // check-in on them first, and this session's own live lease learns them, so teammates are told about it too.
+  const paths = promptFiles(prompt, input, found.root);
+  // The lease label names the project; a teammate's hook lease that names another one is on another repository's files.
+  const label = projectLabel(found.root);
+  const projectName = labelProject(label);
+  const own = state !== null && leaseLive(state) ? state.lease : null;
+  const recallMeta = { [UNLOGGED_META]: true, ...reported, ...pathsMeta(paths, own) };
+  const recall = callTool(session, "recall", { about, limit: RECALL_LIMIT }, recallMeta).then((result) => result.structured ?? null);
   // The lease's calls stop short of the budget. A start still unanswered then is not counted, so the next try sends
   // the same idempotency key and gets the same lease back rather than leaving a second one open.
   const leaseBy = deadlineAt - LEASE_CUTOFF_MS;
-  const leaseIf = (ok, n) => (ok === true ? settleBy(startLease(session, key, n, projectLabel(found.root), args.client, reported), leaseBy, LATE) : null);
+  const leaseIf = (ok, n) => (ok === true ? settleBy(startLease(session, key, n, label, args.client, reported, paths), leaseBy, LATE) : null);
   if (state === null) {
     const allowed = project ? Promise.resolve(true) : leaseAllowed(target, found.root, leaseBy);
     const [memory, started, autoLease] = await Promise.all([recall, allowed.then((ok) => leaseIf(ok, 1)), allowed]);
     const work = started === LATE ? null : started;
-    const block = firstBlock(memory, work);
+    const block = firstBlock(memory, work, null, paths, projectName);
     context = block.text;
     writeState(key, { lease: work?.lease ?? null, expiresAt: work?.expires_at ?? null, leases: started === LATE ? 0 : 1, shown: block.shown, nudged: false, autoLease }, env);
     return;
@@ -143,7 +176,7 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.prompt), async (dead
   const work = started === LATE ? null : started;
   const known = { ...state, autoLease: project ? state.autoLease : autoLease };
   const next = work === null ? known : { ...known, lease: work.lease ?? null, expiresAt: work.expires_at ?? null, leases: state.leases + 1 };
-  const news = newsBlock(memory, next);
+  const news = newsBlock(memory, next, paths, projectName);
   const restarted = work === null ? null : restartedLine(work);
   const parts = [restarted, news?.text ?? null].filter((part) => part !== null);
   context = parts.length === 0 ? null : parts.join("\n");

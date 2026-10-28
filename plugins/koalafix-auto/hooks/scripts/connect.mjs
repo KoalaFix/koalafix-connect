@@ -306,9 +306,14 @@ export async function readApi(target, route, deadlineAt) {
   }
 }
 
-/** The session brief (Part A 4.6) over the read API: `GET <server>/api/v1/brief` answers `{ as_of, brief, tokens }`. */
-export async function fetchBrief(target, deadlineAt) {
-  const body = await readApi(target, "/api/v1/brief", deadlineAt);
+/**
+ * The session brief (Part A 4.6) over the read API: `GET <server>/api/v1/brief` answers `{ as_of, brief, tokens }`.
+ * `repo` (provenance.mjs `reportedRepo`) puts the team decisions that name it first (ADR-0041); a server from before
+ * ignores it.
+ */
+export async function fetchBrief(target, deadlineAt, repo = null) {
+  const route = repo === null ? "/api/v1/brief" : `/api/v1/brief?repo=${encodeURIComponent(repo)}`;
+  const body = await readApi(target, route, deadlineAt);
   if (!isRecord(body) || typeof body.brief !== "string") {
     throw new Error("GET /api/v1/brief answered no brief");
   }
