@@ -17,6 +17,8 @@ MCP server address and the agent instructions. The KoalaFix service itself is no
 - The `koalafix` plugin contains no scripts, no hooks, no tokens and no telemetry, and runs nothing on your machine.
 - The optional `koalafix-auto` plugin (Claude Code, Cowork, Codex, Cursor) and the Gemini CLI extension add session
   hooks that make team memory automatic. They run Node.js scripts on your machine; see [Session hooks](#session-hooks).
+  In Claude Code and Cowork, `koalafix-auto` also carries a copy of the KoalaFix server that uses the hooks' sign-in,
+  so you sign in once.
 - Kalibrate is the name of the engine behind KoalaFix, which is why some files and settings here say kalibrate
   (`~/.kalibrate/`, the `KALIBRATE_*` variables).
 
@@ -81,9 +83,24 @@ keeps the token; no file here holds one. To sign in ahead of time:
 - Codex: run `codex mcp login koalafix`.
 - Gemini CLI: run `/mcp auth koalafix`.
 
-The session hooks (`koalafix-auto`, and the Gemini CLI extension) sign in once on their own, on top of your client's
-sign-in: at the first session start the agent shows you a link and a code to approve in the browser. See
-[Session hooks](#session-hooks).
+The session hooks (`koalafix-auto`, and the Gemini CLI extension) sign in once on their own: at the first session
+start the agent shows you a link and a code to approve in the browser. See [Session hooks](#session-hooks).
+
+In Claude Code and Cowork, that one approval signs the KoalaFix tools in too, with no `/mcp` step: `koalafix-auto`
+carries its own copy of the `koalafix` server, at the same address, whose `headersHelper` (one of the hook scripts,
+`headers.mjs --user`) hands the server the hooks' sign-in. Claude Code connects only one of the two copies.
+
+- The tools connected when the session started, before you approved, so they use the sign-in from your next session.
+  To use it in the same session, open `/mcp`, pick `koalafix` and choose Reconnect.
+- Claude Code keeps the copy of the plugin listed first in your settings. Installing `koalafix-auto` (which brings
+  `koalafix` with it) lists it first. If you installed `koalafix` on its own before, `/mcp` still asks you to sign in
+  there once. To use the one sign-in instead, run `claude plugin uninstall koalafix-auto@koalafix-connect`, then
+  `claude plugin uninstall koalafix@koalafix-connect`, then `claude plugin install koalafix-auto@koalafix-connect`.
+- With no hooks' sign-in on the machine, the helper sends nothing and Claude Code's own OAuth sign-in works as above.
+- If the server refuses the saved sign-in (you left the team, or the token was revoked), the tools show as failed in
+  `/mcp`. Run `koalafix login`, or delete `~/.kalibrate/credentials.json` and start a new session to sign in again.
+
+Codex, Cursor and Gemini CLI sign their KoalaFix tools in on their own, as above.
 
 ## The routine your agent follows
 
@@ -125,7 +142,8 @@ With only the `koalafix` plugin, the agent uses team memory when it decides to. 
   your own Claude Code sign-in, nothing of it is saved as a session, and your session's own history is left as it
   was; `KALIBRATE_CAPTURE_AT_END=off` turns it off. The lease the hooks started is closed.
 - **First use:** with no KoalaFix credential on the machine, the session-start hook starts a browser sign-in and
-  the agent shows you a link and a code. Approve it once; the hooks turn on by themselves.
+  the agent shows you a link and a code. Approve it once; the hooks turn on by themselves, and in Claude Code the
+  KoalaFix tools use the same sign-in from the next session (see [Sign in](#sign-in)).
 
 | Client | Where the hooks come from | Events |
 |---|---|---|

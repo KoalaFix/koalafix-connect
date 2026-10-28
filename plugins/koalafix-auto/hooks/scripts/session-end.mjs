@@ -17,6 +17,7 @@ import { locateHook, parseHookArgs, quietOutput } from "./client.mjs";
 import { appendSpool } from "./spool.mjs";
 import { ENDED_OUTCOME, readState, removeState, sessionIdOf, sessionKey } from "./wip.mjs";
 import { endPassDue, startEndPass } from "./capture-end.mjs";
+import { forgetModel, provenanceMeta } from "./provenance.mjs";
 
 const env = process.env;
 const args = parseHookArgs(process.argv.slice(2));
@@ -39,23 +40,26 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.sessionEnd), async (
   const state = readState(key, env);
   // Claude Code only: the decision capture's last pass over turns no capture covered (capture-end.mjs).
   const cwd = env.CLAUDE_PROJECT_DIR ?? (typeof input.cwd === "string" ? input.cwd : project);
-  const owed = args.client === "claude-code" && target.kind === "http" && endPassDue(state, env, input);
+  const owed = args.client === "claude-code" && endPassDue(state, env, input);
   const startPass = () => (owed ? startEndPass({ target, root: project, cwd, sessionId, env, deadlineAt }) : null);
   if (state === null || state.lease === null) {
     if (state !== null) {
       removeState(key, env);
     }
+    forgetModel(key, env);
     await startPass();
     return "no lease";
   }
   const pending = { action: "done", lease: state.lease, outcome: ENDED_OUTCOME, idempotency_key: `hook-wip-done:${key}:${state.leases}` };
   removeState(key, env);
   appendSpool({ source: "session-end", project, tool: "work", arguments: pending, reason: "queued before the close, in case the session exits first" }, env);
+  // Once the close is durable: the close reports the session's repo and model too, then the kept model goes.
+  const reported = provenanceMeta(project, input, key, env);
+  forgetModel(key, env);
   // Started once the close is durable, so the pass never delays it.
   const pass = startPass();
   try {
-    const session = await connect(target, deadlineAt);
-    await callTool(session, "work", pending, { [IDEMPOTENCY_META]: pending.idempotency_key });
+    await callTool(connect(target, deadlineAt), "work", pending, { [IDEMPOTENCY_META]: pending.idempotency_key, ...reported });
   } finally {
     await pass;
   }

@@ -13,6 +13,20 @@ import fs from "node:fs";
 import path from "node:path";
 import { kalibrateHome } from "./spool.mjs";
 
+/**
+ * No credential for the server a hook would call: no `.kalibrate/token` and no `koalafix login` token for it. A hook
+ * then does nothing at all, at once: nothing printed, no sign-in, no network (client.mjs `locateHook` answers null).
+ * Cloud Cowork runs plugin hooks in a container with no sign-in file and no browser, where anything else would wait
+ * or nag on every session.
+ */
+export class NoCredentialError extends Error {
+  /** @param {string} [message] */
+  constructor(message = "no KoalaFix credential on this machine; run koalafix login") {
+    super(message);
+    this.name = "NoCredentialError";
+  }
+}
+
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

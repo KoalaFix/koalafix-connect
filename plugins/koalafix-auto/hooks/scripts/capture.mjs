@@ -21,6 +21,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { findRepository, remoteName } from "./label.mjs";
+import { readApi } from "./connect.mjs";
 
 /** The default turns and minutes after the last capture that make the next one due. */
 export const CAPTURE_TURNS = 4;
@@ -270,13 +271,7 @@ export function captureReason(choice, client = "claude-code", atEnd = false) {
 
 /** The person's spaces over the read API: `GET <server>/api/v1/spaces` answers a `SpacesPage`. */
 export async function fetchSpaces(target, deadlineAt) {
-  const info = target.clientInfo ?? { name: "kalibrate-claude-code-hook", version: "0.2.0" };
-  const headers = { accept: "application/json", authorization: `Bearer ${target.token}`, "user-agent": `${info.name}/${info.version}` };
-  const signal = AbortSignal.timeout(Math.max(1, deadlineAt - Date.now()));
-  const response = await fetch(`${target.api}/api/v1/spaces?limit=200`, { method: "GET", headers, redirect: "error", signal });
-  if (!response.ok) {
-    await response.body?.cancel();
-    throw new Error(`GET /api/v1/spaces answered HTTP ${response.status}`);
-  }
-  return JSON.parse(await response.text());
+  // Through the breaker (connect.mjs readApi): a server in its cool-off is not asked and the read fails at once; a
+  // server that is down starts a cool-off, and one that answers clears it.
+  return readApi(target, "/api/v1/spaces?limit=200", deadlineAt);
 }

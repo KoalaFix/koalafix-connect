@@ -5,8 +5,8 @@
 // (Claude Code, Codex, Cursor) and the Gemini extension run the same fail-open hooks `koalafix init` installs, in
 // --user mode. Run it after the hooks change in kalibrate:
 //   node scripts/sync-hooks.mjs <path to a KoalaFix/kalibrate checkout>
-// It copies every .mjs in packages/adapters/claude-code/src/hooks except the headers helper (an init-only file),
-// removes scripts that no longer exist there, rewrites the hook files (scripts/hook-configs.mjs) and records the
+// It copies every .mjs in packages/adapters/claude-code/src/hooks (the headers helper too: koalafix-auto's copy of
+// the koalafix server runs it with --user in Claude Code), removes scripts that no longer exist there, rewrites the hook files (scripts/hook-configs.mjs) and records the
 // source commit and each file's sha256 in hooks/scripts/SOURCE, which `node scripts/check.mjs` holds the copies to.
 // A checkout with uncommitted changes to the hooks is refused, so SOURCE always names code that exists in git.
 
@@ -31,8 +31,7 @@ if (git("status", "--porcelain", "--", hooksRel) !== "") {
 }
 const from = path.join(path.resolve(checkout), ...hooksRel.split("/"));
 const to = path.join(root, "plugins", "koalafix-auto", "hooks", "scripts");
-const skip = new Set(["headers.mjs"]);
-const wanted = fs.readdirSync(from).filter((name) => name.endsWith(".mjs") && !name.endsWith(".test.mjs") && !skip.has(name)).sort();
+const wanted = fs.readdirSync(from).filter((name) => name.endsWith(".mjs") && !name.endsWith(".test.mjs")).sort();
 fs.mkdirSync(to, { recursive: true });
 for (const name of fs.readdirSync(to)) {
   if (name.endsWith(".mjs") && !wanted.includes(name)) {
