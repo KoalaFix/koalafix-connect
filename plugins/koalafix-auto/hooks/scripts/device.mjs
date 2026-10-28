@@ -12,19 +12,19 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { HttpStatusError, messageOf } from "./connect.mjs";
 import { credentialsPath, originOf } from "./credentials.mjs";
+import { assertOnline, markOffline, markOnline, originKey } from "./offline.mjs";
 import { apiBase } from "./project.mjs";
 import { kalibrateHome } from "./spool.mjs";
 
-export const DEFAULT_SERVER_URL = "https://mcp.koalafix.com";
+/**
+ * Thrown by `locateHook` for a plugin install with no credential where a browser can be shown: the hook may then sign
+ * in (signInStep). Where none can (client.mjs `canShowBrowser`), `locateHook` answers null and the hook is silent.
+ */
+export { NoCredentialError } from "./credentials.mjs";
 
-/** Thrown by `locateHook` for a plugin install with no credential: the hook may then sign in (signInStep). */
-export class NoCredentialError extends Error {
-  constructor() {
-    super("no KoalaFix credential on this machine; run koalafix login");
-    this.name = "NoCredentialError";
-  }
-}
+export const DEFAULT_SERVER_URL = "https://mcp.koalafix.com";
 
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -76,13 +76,33 @@ export function saveCredential(serverUrl, token, label, env = process.env, now =
   writePrivate(file, { version: 1, default: origin, servers });
 }
 
+/**
+ * One sign-in request, under the circuit breaker (offline.mjs) like every other server call: it fails at once while
+ * the server's cool-off runs, starts one when the server is down or answers 5xx, and clears it on any other answer.
+ */
 async function post(url, body, deadlineAt, fetchFn) {
-  const response = await fetchFn(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(Math.max(200, deadlineAt - Date.now())),
-  });
+  assertOnline(url);
+  const origin = originKey(url);
+  let response;
+  try {
+    response = await fetchFn(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(Math.max(200, deadlineAt - Date.now())),
+    });
+  } catch (error) {
+    if (!(error instanceof Error && error.name === "AbortError")) {
+      markOffline(origin, messageOf(error));
+    }
+    throw error;
+  }
+  if (response.status >= 500 && response.status !== 501) {
+    markOffline(origin, `HTTP ${response.status}`);
+    await response.body?.cancel();
+    throw new HttpStatusError(response.status, `${new URL(url).pathname} answered HTTP ${response.status}`);
+  }
+  markOnline(origin);
   let json = {};
   try {
     const parsed = await response.json();
@@ -93,8 +113,17 @@ async function post(url, body, deadlineAt, fetchFn) {
   return { status: response.status, ok: response.ok, body: json };
 }
 
-function showText(pending) {
-  return `KoalaFix team memory is installed but not signed in on this machine. Show the user this link and code, and ask them to approve it: ${pending.uri} (code ${pending.userCode}). Team memory turns on by itself once they approve; nothing else is needed.`;
+/**
+ * What the model shows the person for a pending sign-in. In Claude Code the koalafix-auto plugin's copy of the server
+ * sends this same sign-in (headers.mjs --user), but it connected at session start, before the approval, so it picks
+ * the sign-in up when it next connects. Other clients sign their KoalaFix tools in on their own.
+ */
+function showText(pending, client) {
+  const after =
+    client === "claude-code"
+      ? "Team memory turns on by itself once they approve. The KoalaFix tools connected before the approval, so they pick it up in the next session, or now once the user reconnects koalafix in /mcp."
+      : "Once they approve, the hooks turn on by themselves; the KoalaFix tools have their own sign-in the first time they are used.";
+  return `KoalaFix team memory is installed but not signed in on this machine. Show the user this link and code, and ask them to approve it: ${pending.uri} (code ${pending.userCode}). ${after}`;
 }
 
 /**
@@ -114,7 +143,7 @@ export async function signInStep({ env = process.env, client, deadlineAt, start,
       return { signedIn: true, text: null };
     }
     if (polled.status === 428 || polled.body.error === "authorization_pending") {
-      return { signedIn: false, text: start ? showText(pending) : null };
+      return { signedIn: false, text: start ? showText(pending, client) : null };
     }
     fs.rmSync(file, { force: true });
   }
@@ -140,5 +169,5 @@ export async function signInStep({ env = process.env, client, deadlineAt, start,
     expiresAt: new Date(Date.now() + (typeof body.expires_in === "number" ? body.expires_in : 600) * 1000).toISOString(),
   };
   writePrivate(file, next);
-  return { signedIn: false, text: showText(next) };
+  return { signedIn: false, text: showText(next, client) };
 }

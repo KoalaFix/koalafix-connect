@@ -48,11 +48,13 @@ choose to authenticate.
   `work` with action `start` naming the task, with its branch, PR or issue as `ref` (or the `paths` you will change) so overlapping work shows up.
 - Verdict clear: go. stale: check the source, then `verify`. conflict: stop and show the user both claims.
   unknown: ask the user.
-- Learned something durable: `remember`. Confirmed a fact still holds: `verify`.
+- Learned something durable: `remember`. A decision about the team's shared work (code, conventions, process,
+  ownership, handoffs): `remember` it with kind `decision` and lane `team`, in your own words, never quoting the user (no `user_words`).
+  Confirmed a fact still holds: `verify`.
 - When the task is finished: call `work` with action `done`. Call `open` to see what is still open for you.
 - `share` and `settle` only with the user's yes.
 
-Session hooks (the brief at session start, a recall on every prompt, work started and closed for you) are not part
+Session hooks (the brief at session start, a recall on every prompt, the session's decisions saved to the team) are not part
 of this plugin. Install `koalafix-auto@koalafix-connect` beside it for Claude Code, Codex and Cursor.
 
 ## Links

@@ -1,6 +1,6 @@
 {
   "name": "koalafix",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shared team memory and work items for Gemini CLI and the other AI tools your team uses.",
   "mcpServers": {
     "koalafix": {

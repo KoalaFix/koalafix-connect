@@ -26,6 +26,19 @@
         ]
       }
     ],
+    "AfterAgent": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "name": "koalafix-capture",
+            "command": "node \"${extensionPath}/plugins/koalafix-auto/hooks/scripts/stop.mjs\" --user --client gemini-cli",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
     "SessionEnd": [
       {
         "matcher": "*",

@@ -9,8 +9,7 @@
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { userServer } from "./credentials.mjs";
-import { NoCredentialError } from "./device.mjs";
+import { NoCredentialError, userServer } from "./credentials.mjs";
 import { findConfig, hasProjectInstall, resolveTarget, trustedRoot, userFound } from "./project.mjs";
 
 /** The clients a hook can speak for. `claude-code` is the default. */
@@ -121,19 +120,56 @@ export function hookRoot(args, env = process.env) {
 }
 
 /**
+ * Whether a sign-in link could be opened where this hook runs. Conservative: Windows and macOS always can; elsewhere
+ * only with a display (`DISPLAY`, `WAYLAND_DISPLAY`) or a `BROWSER` set. Never in a Claude Code cloud session, whose
+ * VM sets `CLAUDE_CODE_REMOTE=true` (code.claude.com/docs/en/cloud-environments, "Install dependencies with a
+ * SessionStart hook"). Cloud Cowork's Linux container has no display, so it counts as no browser too.
+ * @param {Record<string, string | undefined>} [env]
+ * @param {string} [platform]
+ */
+export function canShowBrowser(env = process.env, platform = process.platform) {
+  if (env.CLAUDE_CODE_REMOTE === "true") {
+    return false;
+  }
+  if (platform === "win32" || platform === "darwin") {
+    return true;
+  }
+  return ["DISPLAY", "WAYLAND_DISPLAY", "BROWSER"].some((name) => typeof env[name] === "string" && env[name] !== "");
+}
+
+/**
  * Where a hook finds its server, or null when it should do nothing at all.
  * - A project install (`koalafix init`, the default): the trusted project's `.kalibrate/config.json`, as before.
  * - A plugin or extension install (`--user`): no project file is read. The server and token are the person's own
- *   (`koalafix login`), and the folder the client reports only keys the session's state and spool. When that folder
- *   has its own `koalafix init` install, the plugin hook stands down (null), so the project's hooks run alone.
- * Throws when a project install is broken or a plugin install has no credential: the hook reports it on stderr.
+ *   (`koalafix login`, or the hooks' browser sign-in), and the folder the client reports only keys the session's state
+ *   and spool. When that folder has its own `koalafix init` install, the plugin hook stands down (null), so the
+ *   project's hooks run alone.
+ * With no credential and no way to show a browser (`canShowBrowser`), null: the hook exits at once and silently, with
+ * no sign-in and no network. With a browser, a plugin install throws NoCredentialError (the hook may sign in,
+ * device.mjs) and a project install throws a plain error the hook reports on stderr.
+ * Throws when a project install is broken (no config, no serverUrl, a refused link): the hook reports it on stderr.
  * @param {{ client: string, project: string | null, user?: boolean }} args
  * @param {Record<string, unknown>} [input] the hook's stdin
+ * @param {string} [platform]
  */
-export function locateHook(args, env = process.env, input = {}) {
+export function locateHook(args, env = process.env, input = {}, platform = process.platform) {
+  try {
+    return locate(args, env, input);
+  } catch (error) {
+    if (!(error instanceof NoCredentialError)) {
+      throw error;
+    }
+    if (!canShowBrowser(env, platform)) {
+      return null;
+    }
+    throw args.user === true ? error : new Error(error.message);
+  }
+}
+
+function locate(args, env, input) {
   if (args.user !== true) {
     const found = findConfig(hookRoot(args, env));
-    return { found, target: withClient(resolveTarget(found, env, args.client), args.client) };
+    return { found, target: withClient(resolveTarget(found, env), args.client) };
   }
   const reported = reportedFolder(input);
   const dir = env.CLAUDE_PROJECT_DIR;
@@ -145,7 +181,7 @@ export function locateHook(args, env = process.env, input = {}) {
   if (found === null) {
     throw new NoCredentialError();
   }
-  return { found, target: withClient(resolveTarget(found, env, args.client), args.client) };
+  return { found, target: withClient(resolveTarget(found, env), args.client) };
 }
 
 /**
@@ -228,14 +264,14 @@ export function promptOutput(client, context) {
 
 /**
  * What the Stop hook prints to keep the turn going with a reason: Claude Code and Codex read `decision: "block"`,
- * Cursor's stop hook auto-submits `followup_message`. Null when the client cannot be held (Gemini CLI runs the
- * stop script at SessionEnd) or there is no reason.
+ * Gemini CLI's AfterAgent too (`block` is its alias of `deny`: the reason goes back to the model as a new prompt),
+ * Cursor's stop hook auto-submits `followup_message`. Null when the client cannot be held or there is no reason.
  */
 export function stopBlockOutput(client, reason) {
   if (reason === null) {
     return null;
   }
-  if (client === "claude-code" || client === "codex") {
+  if (client === "claude-code" || client === "codex" || client === "gemini-cli") {
     return `${JSON.stringify({ decision: "block", reason })}
 `;
   }

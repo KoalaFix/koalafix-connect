@@ -17,7 +17,10 @@ MCP server address and the agent instructions. The KoalaFix service itself is no
 - The `koalafix` plugin contains no scripts, no hooks, no tokens and no telemetry, and runs nothing on your machine.
 - The optional `koalafix-auto` plugin (Claude Code, Cowork, Codex, Cursor), the `koalafix-copilot` plugin (GitHub
   Copilot) and the Gemini CLI extension add session hooks that make team memory automatic. They run Node.js scripts on
-  your machine; see [Session hooks](#session-hooks).
+  your machine; see [Session hooks](#session-hooks). In Claude Code and Cowork, `koalafix-auto` also carries a copy of
+  the KoalaFix server that uses the hooks' sign-in, so you sign in once.
+- Kalibrate is the name of the engine behind KoalaFix, which is why some files and settings here say kalibrate
+  (`~/.kalibrate/`, the `KALIBRATE_*` variables).
 
 ## Install
 
@@ -31,7 +34,7 @@ MCP server address and the agent instructions. The KoalaFix service itself is no
 `koalafix-auto` brings the `koalafix` plugin with it. For the tools without hooks, install `koalafix@koalafix-connect`
 instead.
 
-On Claude Code 2.1.275 or later, one step also works:
+On Claude Code 2.1.275 or later, one step installs the `koalafix` plugin only (no hooks):
 `/plugin install koalafix --marketplace KoalaFix/koalafix-connect`.
 
 From a shell: `claude plugin marketplace add KoalaFix/koalafix-connect`, then
@@ -55,6 +58,10 @@ Add to Cursor button on the dashboard's Integrations page at https://mcp.koalafi
 repository as a team marketplace under Dashboard, Plugins & MCPs. Add `koalafix-auto` from the same marketplace for
 the session hooks.
 
+Until the Marketplace listing is live, if you are not on Teams or Enterprise, the Add to Cursor button gives you the
+MCP server only: no rule and no hooks. To get the rule, copy `plugins/koalafix/rules/koalafix.mdc` from this
+repository into your project's `.cursor/rules/`.
+
 ### Gemini CLI
 
 ```
@@ -76,7 +83,7 @@ in one plugin. See [its README](plugins/koalafix-copilot/README.md) for sign-in 
 ### Other clients
 
 ChatGPT, Claude on the web, desktop and mobile, Windsurf, Zed, JetBrains, Visual Studio, OpenCode and any other MCP
-client: open the Connect page at https://mcp.koalafix.com for a one-click link or a configuration snippet for your client.
+client: open the dashboard's Integrations page at https://mcp.koalafix.com for a one-click link or a configuration snippet for your client.
 
 ## Sign in
 
@@ -89,13 +96,34 @@ keeps the token; no file here holds one. To sign in ahead of time:
 - Gemini CLI: run `/mcp auth koalafix`.
 - Copilot CLI: run `/mcp auth koalafix` in a session.
 
+The session hooks (`koalafix-auto`, and the Gemini CLI extension) sign in once on their own: at the first session
+start the agent shows you a link and a code to approve in the browser. See [Session hooks](#session-hooks).
+
+In Claude Code and Cowork, that one approval signs the KoalaFix tools in too, with no `/mcp` step: `koalafix-auto`
+carries its own copy of the `koalafix` server, at the same address, whose `headersHelper` (one of the hook scripts,
+`headers.mjs --user`) hands the server the hooks' sign-in. Claude Code connects only one of the two copies.
+
+- The tools connected when the session started, before you approved, so they use the sign-in from your next session.
+  To use it in the same session, open `/mcp`, pick `koalafix` and choose Reconnect.
+- Claude Code keeps the copy of the plugin listed first in your settings. Installing `koalafix-auto` (which brings
+  `koalafix` with it) lists it first. If you installed `koalafix` on its own before, `/mcp` still asks you to sign in
+  there once. To use the one sign-in instead, run `claude plugin uninstall koalafix-auto@koalafix-connect`, then
+  `claude plugin uninstall koalafix@koalafix-connect`, then `claude plugin install koalafix-auto@koalafix-connect`.
+- With no hooks' sign-in on the machine, the helper sends nothing and Claude Code's own OAuth sign-in works as above.
+- If the server refuses the saved sign-in (you left the team, or the token was revoked), the tools show as failed in
+  `/mcp`. Run `koalafix login`, or delete `~/.kalibrate/credentials.json` and start a new session to sign in again.
+
+Codex, Cursor and Gemini CLI sign their KoalaFix tools in on their own, as above.
+
 ## The routine your agent follows
 
 - At the start of a task: call `recall` with what you are about to do, read the verdict first, then call
   `work` with action `start` naming the task, with its branch, PR or issue as `ref` (or the `paths` you will change) so overlapping work shows up.
 - Verdict clear: go. stale: check the source, then `verify`. conflict: stop and show the user both claims.
   unknown: ask the user.
-- Learned something durable: `remember`. Confirmed a fact still holds: `verify`.
+- Learned something durable: `remember`. A decision about the team's shared work (code, conventions, process,
+  ownership, handoffs): `remember` it with kind `decision` and lane `team`, in your own words, never quoting the user (no `user_words`).
+  Confirmed a fact still holds: `verify`.
 - When the task is finished: call `work` with action `done`. Call `open` to see what is still open for you.
 - `share` and `settle` only with the user's yes.
 
@@ -104,20 +132,38 @@ keeps the token; no file here holds one. To sign in ahead of time:
 With only the `koalafix` plugin, the agent uses team memory when it decides to. The hooks make it automatic:
 
 - **Session start:** the team's brief (facts, open items) goes in front of the session.
-- **Each prompt:** one recall about what you asked, in under 1.5 seconds, with the verdict in front of the prompt. On
-  the first real prompt the hook also starts a work-in-progress lease, so teammates see overlapping work. Later
-  prompts add only what this session has not been shown. "ok" or "continue" asks the server nothing.
-- **Stop and session end:** what is open for you (a line in the client's hook log, not in the chat), and the lease
-  closed when the session ends.
+- **Each prompt:** one recall about what you asked, in under 1.5 seconds, with the verdict in front of the prompt.
+  Later prompts add only what this session has not been shown. "ok" or "continue" asks the server nothing. The
+  first prompt also starts your work-in-progress lease, so teammates see who is on what, when the space the server
+  files it in is this folder's space: the space you picked for the folder or the one named after the project is your
+  home space, or you are in one space and the folder is a git repository. Otherwise it starts none, so a personal
+  folder's name never reaches your team and a repository never shows in another team's brief; your agent can still name its work with the `work` tool.
+- **End of a turn, now and then:** at the end of the first turn that had a real prompt, then whenever 4 more turns
+  or 20 minutes have passed since the last time (`KALIBRATE_CAPTURE_TURNS`, `KALIBRATE_CAPTURE_MINUTES`), the hook
+  asks your agent to save each decision made since about the team's shared work (code, conventions, process,
+  ownership, handoffs) to your team with `remember`, in the agent's own words, skipping any it already saved. Never
+  your messages, never anything personal or secret, and nothing at all when nothing was decided. Your teammates'
+  agents then recall those decisions. Only in a session you are in: a `claude -p` run, an Agent SDK program, a
+  background session, `codex exec` (Codex is held only in its terminal app, IDE extension and desktop app) and every
+  Cursor and Gemini CLI session (their scripted runs look the same to a hook) are never held, so a script gets its own
+  answer (`KALIBRATE_CAPTURE=always` turns it on there, `off` turns it off everywhere). In several spaces with none
+  named after the project, your agent asks you which one once, and the hook remembers your pick for that folder on
+  your machine. The hook also writes what is open for you to the client's hook log (not the chat).
+- **Session end:** in Claude Code, when the session ends with turns that were not covered yet, the hook starts one
+  short background run, `claude -p --resume <session> --fork-session --no-session-persistence`, that can only call
+  the koalafix `remember` and `recall` tools, so the decisions of the last turns are saved too. It is one AI call on
+  your own Claude Code sign-in, nothing of it is saved as a session, and your session's own history is left as it
+  was; `KALIBRATE_CAPTURE_AT_END=off` turns it off. The lease the hooks started is closed.
 - **First use:** with no KoalaFix credential on the machine, the session-start hook starts a browser sign-in and
-  the agent shows you a link and a code. Approve it once; the hooks turn on by themselves.
+  the agent shows you a link and a code. Approve it once; the hooks turn on by themselves, and in Claude Code the
+  KoalaFix tools use the same sign-in from the next session (see [Sign in](#sign-in)).
 
 | Client | Where the hooks come from | Events |
 |---|---|---|
 | Claude Code, Cowork | `koalafix-auto` plugin | SessionStart, UserPromptSubmit, Stop, SessionEnd |
 | Codex (CLI and desktop) | `koalafix-auto` plugin, after you trust it in `/hooks` | SessionStart, UserPromptSubmit, Stop, SessionEnd |
 | Cursor | `koalafix-auto` plugin (its hooks run from `${CURSOR_PLUGIN_ROOT}`) | sessionStart, beforeSubmitPrompt, stop, sessionEnd |
-| Gemini CLI | this extension | SessionStart, BeforeAgent, SessionEnd |
+| Gemini CLI | this extension | SessionStart, BeforeAgent, AfterAgent, SessionEnd |
 | GitHub Copilot: CLI, the Copilot app, VS Code (hooks in preview there) | `koalafix-copilot` plugin, through `hooks/copilot.mjs` | sessionStart, userPromptTransformed (the recall goes after your prompt in what the model receives), agentStop, sessionEnd |
 | Copilot cloud agent, JetBrains, Visual Studio | none: the cloud agent runs only repository hook files and has no credential; JetBrains and Visual Studio run no Copilot hooks | the server's instructions; the cloud agent connects with a token |
 | claude.ai, Claude desktop and mobile chat, ChatGPT | none: these apps run no hooks | the server's instructions and the skill carry the routine |
@@ -129,17 +175,31 @@ With only the `koalafix` plugin, the agent uses team memory when it decides to. 
 browser sign-in or `koalafix login`) and send it only to the exact server it was issued for. They send that server:
 - your prompt's text for the recall (up to 2,000 characters, with anything shaped like a token or key taken out),
   marked so the server keeps no log of it;
-- the lease's description, built from the project, never from your prompt: "working in <repo> on <branch>", or the
-  folder name, with credential shapes taken out. **Your teammates see it** as your work in progress;
-- the lease's start and end.
+- each time it asks for the decisions, a request for the list of your spaces, to pick where they go (if the
+  request fails, it is tried again at the end of the next turn);
+- on the first prompt, a request for the list of your spaces, to tell whether your lease would go to this folder's
+  space;
+- when it starts a lease, the lease's description, built from the project, never from your prompt:
+  "working in <repo> on <branch>", or the folder name, with credential shapes taken out. **Your teammates see it** as
+  your work in progress; and the lease's start and end.
+
+The decisions themselves are written by your agent with the `remember` tool, in its words, to your team's space:
+**your teammates see them**. They go to your only space, whatever folder you work in; if you have several, to the
+one named after the project (its repository or folder name); otherwise your agent asks you which space before it
+saves anything, and the names of up to eight of your spaces go into its context for that question. What counts as a
+team decision is your agent's judgement, so in a personal project, tell it when a session is not team work. The hooks
+never send the session's transcript, and make no AI call of their own except Claude Code's one background run at
+session end, described above, which runs on your machine with your own sign-in.
 
 They keep this session's state and a retry queue in `~/.kalibrate/`. No file in this repository holds a token. The
 only address in them is the hosted server, `https://mcp.koalafix.com`, where the first browser sign-in goes.
 
 **They never get in your way.** Every hook gives up silently on any problem: no Node, no credential, a server that is
 down or slow. A prompt waits at most the hook's 1.5 second budget, and no hook blocks a prompt or a tool call. The
-one exception is small: when the server refuses the work lease, the stop hook asks the agent once per session to
-start it, then never again. In a project that has its own `koalafix init` install, the plugin's hooks do nothing, so nothing runs
+exceptions are small: now and then the stop hook asks the agent to save the session's team decisions (one more
+step for the agent, which saves nothing when nothing was decided; in Gemini CLI the agent also gives its last answer
+again, since Gemini CLI replaces an answer a hook holds), and when the server refuses the work lease the hooks
+started, it asks the agent once to start it. In a project that has its own `koalafix init` install, the plugin's hooks do nothing, so nothing runs
 twice.
 
 **Node.js.** Claude Code's native installer, the Codex binary and Cursor do not bring Node with them. Without Node the

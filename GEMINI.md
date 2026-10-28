@@ -7,12 +7,14 @@ This project uses KoalaFix, the team's shared memory, through the `koalafix` MCP
   `work` with action `start` naming the task, with its branch, PR or issue as `ref` (or the `paths` you will change) so overlapping work shows up.
 - Verdict clear: go. stale: check the source, then `verify`. conflict: stop and show the user both claims.
   unknown: ask the user.
-- Learned something durable, or the user decided something (a choice, a rule, a name): `remember` it.
+- Learned something durable, or the user decided something (a choice, a rule, a name): `remember` it. A decision
+  about the team's shared work (code, conventions, process, ownership, handoffs) goes to lane `team` with kind
+  `decision`, in your own words: never quote the user (no `user_words`), and leave out anything personal or secret.
   Confirmed a fact still holds: `verify`.
 - When the task is finished: call `work` with action `done`. Call `open` to see what is still open for you.
 - `share` and `settle` only with the user's yes.
 
-When KoalaFix hooks are installed, a block marked "added by a hook" already holds a recall and a work lease for
-this task: use it instead of calling `recall` and `work` again. Without hooks, follow every step yourself.
+When KoalaFix hooks are installed, a block marked "added by a hook" already holds a recall (and, when the hooks started one, a work
+lease) for this task: use it instead of calling `recall` and `work` again. Without hooks, follow every step yourself.
 
 If a `koalafix` tool reports that sign-in is needed, ask the user to run `/mcp auth koalafix`.
