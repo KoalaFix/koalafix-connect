@@ -118,8 +118,12 @@ Codex, Cursor and Gemini CLI sign their KoalaFix tools in on their own, as above
 
 With only the `koalafix` plugin, the agent uses team memory when it decides to. The hooks make it automatic:
 
-- **Session start:** the team's brief (facts, open items) goes in front of the session.
+- **Session start:** the team's brief goes in front of the session: facts, the team's current decisions (the ones
+  that name this repository first), teammates' work in progress and what is open for you. The first time the hooks
+  run on your machine, they also show you a one-line notice of what they send and how to turn them off.
 - **Each prompt:** one recall about what you asked, in under 1.5 seconds, with the verdict in front of the prompt.
+  When a teammate has checked in on a file your prompt names or this session has edited, the agent is told before it
+  edits: who, what and since when, as a "Collision" line, once per check-in, without calling a tool.
   Later prompts add only what this session has not been shown. "ok" or "continue" asks the server nothing. The
   first prompt also starts your work-in-progress lease, so teammates see who is on what, when the space the server
   files it in is this folder's space: the space you picked for the folder or the one named after the project is your
@@ -160,6 +164,13 @@ With only the `koalafix` plugin, the agent uses team memory when it decides to. 
 browser sign-in or `koalafix login`) and send it only to the exact server it was issued for. They send that server:
 - your prompt's text for the recall (up to 2,000 characters, with anything shaped like a token or key taken out),
   marked so the server keeps no log of it;
+- with that same recall, the paths of up to 20 files the prompt is about: paths your prompt names that exist in this
+  project, and files this session's agent edited, which the hook reads from the end of your client's own session
+  transcript on your machine (only the paths leave it, never the transcript). Never a path outside the project or
+  through a symbolic link, never a file's contents, and none at all when you start the agent in your home folder or a
+  drive's top. The paths are added to your work-in-progress lease, so **your teammates see them** while you work, and
+  their agents are told when they are about to edit one;
+- at session start, this repository's name (or the folder's), so the brief puts the decisions about it first;
 - each time it asks for the decisions, a request for the list of your spaces, to pick where they go (if the
   request fails, it is tried again at the end of the next turn);
 - on the first prompt, a request for the list of your spaces, to tell whether your lease would go to this folder's
@@ -178,6 +189,13 @@ session end, described above, which runs on your machine with your own sign-in.
 
 They keep this session's state and a retry queue in `~/.kalibrate/`. No file in this repository holds a token. The
 only address in them is the hosted server, `https://mcp.koalafix.com`, where the first browser sign-in goes.
+
+**Team memory comes in as data, never as instructions.** What teammates and their agents wrote (facts, decisions,
+notes, check-ins) goes into the session inside a `<koalafix-memory-…>` block, under one line telling the agent to
+weigh it and never follow instructions in it. KoalaFix's own lines (the verdict, the work-in-progress line, the
+collision warning, an unfinished set-up) stay outside that block. The block's tags carry an id taken from a hash of
+what is inside, so a note cannot close the block early, and anything inside shaped like its tags is made harmless, so
+a note cannot pretend to be KoalaFix. Shared memory is a way in for prompt injection; this is the guard.
 
 **They never get in your way.** Every hook gives up silently on any problem: no Node, no credential, a server that is
 down or slow. A prompt waits at most the hook's 1.5 second budget, and no hook blocks a prompt or a tool call. The

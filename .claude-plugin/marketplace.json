@@ -20,7 +20,7 @@
     {
       "name": "koalafix-auto",
       "source": "./plugins/koalafix-auto",
-      "description": "Makes KoalaFix automatic in Claude Code and Cowork: the team brief at session start, recall on each prompt, work started and closed for you. Installs the koalafix plugin with it. Needs Node.js 22 or later.",
+      "description": "Makes KoalaFix automatic in Claude Code and Cowork: the team brief and current decisions at session start, recall on each prompt, a warning before the agent edits a file a teammate has checked in on, work in progress started and closed for you. Installs the koalafix plugin with it. Sends each prompt (keys and tokens taken out, never logged) and the paths of files it names or the session edits to your KoalaFix server; teammates see your project, branch and those paths. Needs Node.js 22 or later.",
       "category": "development",
       "tags": [
         "memory",
