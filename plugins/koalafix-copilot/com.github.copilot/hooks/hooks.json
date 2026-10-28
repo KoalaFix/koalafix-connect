@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "command": "node \"${PLUGIN_ROOT}/hooks/copilot.mjs\" sessionStart",
+        "timeoutSec": 10
+      }
+    ],
+    "userPromptTransformed": [
+      {
+        "type": "command",
+        "command": "node \"${PLUGIN_ROOT}/hooks/copilot.mjs\" userPromptTransformed",
+        "timeoutSec": 5
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "command",
+        "command": "node \"${PLUGIN_ROOT}/hooks/copilot.mjs\" agentStop",
+        "timeoutSec": 5
+      }
+    ],
+    "sessionEnd": [
+      {
+        "type": "command",
+        "command": "node \"${PLUGIN_ROOT}/hooks/copilot.mjs\" sessionEnd",
+        "timeoutSec": 5
+      }
+    ]
+  }
+}

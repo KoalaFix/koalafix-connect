@@ -12,7 +12,10 @@
 // 4. No file holds a token, a key or a bearer header, and no hook file names a server: the scripts find the
 //    person's server and token at run time, so the bundle carries neither.
 // 5. The listed koalafix plugin stays hook-free, so the OpenAI directory still takes it.
-// 6. koalafix-auto's copy of the koalafix server (Claude Code) has the koalafix plugin's URL and runs a copied helper
+// 6. The Copilot plugin's copies (scripts, skill, licence) equal their originals (scripts/copies.mjs), it ships no
+//    other file, its adapter exists, its marketplace entry matches its name, version and folder, its mcp.json names
+//    exactly the koalafix plugin's server, and the adapter's tests pass.
+// 7. koalafix-auto's copy of the koalafix server (Claude Code) has the koalafix plugin's URL and runs a copied helper
 //    with --user, and the listed plugin names no helper.
 // Exits 1 and names each problem.
 
@@ -21,6 +24,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { copyProblems } from "./copies.mjs";
 import { HOOK_FILES, text } from "./hook-configs.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -61,6 +65,11 @@ for (const [file, value] of Object.entries(HOOK_FILES)) {
   for (const [, name] of body.matchAll(/hooks\/scripts\/([a-z-]+\.(?:mjs|sh))/g)) {
     if (!fs.existsSync(path.join(scripts, name))) {
       problems.push(`${file} runs hooks/scripts/${name}, which is not in plugins/koalafix-auto/hooks/scripts`);
+    }
+  }
+  for (const [, name] of body.matchAll(/\$\{PLUGIN_ROOT\}\/(hooks\/[a-z-]+\.mjs)/g)) {
+    if (!fs.existsSync(path.join(root, "plugins", "koalafix-copilot", name))) {
+      problems.push(`${file} runs ${name}, which is not in plugins/koalafix-copilot`);
     }
   }
   if (/https?:\/\//.test(body)) {
@@ -121,6 +130,35 @@ for (const manifest of [".claude-plugin", ".codex-plugin", ".cursor-plugin"].map
   if (fs.existsSync(manifest) && "hooks" in JSON.parse(read(manifest))) {
     problems.push(`${rel(manifest)} names hooks: the listed plugin must stay hook-free`);
   }
+}
+
+problems.push(...copyProblems(root));
+const copilot = path.join(root, "plugins", "koalafix-copilot");
+const copilotManifest = JSON.parse(read(path.join(copilot, "plugin.json")));
+const copilotListing = JSON.parse(read(path.join(root, ".github", "plugin", "marketplace.json"))).plugins.find((entry) => entry.name === copilotManifest.name);
+if (copilotListing === undefined) {
+  problems.push(`.github/plugin/marketplace.json does not list ${copilotManifest.name}, the name in plugins/koalafix-copilot/plugin.json`);
+} else {
+  if (copilotListing.version !== copilotManifest.version) {
+    problems.push(`.github/plugin/marketplace.json lists ${copilotManifest.name} at ${copilotListing.version}, but its plugin.json says ${copilotManifest.version}`);
+  }
+  if (String(copilotListing.source).replace(/^\.\//, "") !== "plugins/koalafix-copilot") {
+    problems.push(`.github/plugin/marketplace.json points ${copilotManifest.name} at ${copilotListing.source}, not ./plugins/koalafix-copilot`);
+  }
+}
+// The Copilot plugin names the same one server as the koalafix plugin, and nothing else.
+const servers = (file) => JSON.parse(read(file)).mcpServers ?? {};
+const wanted = JSON.stringify(Object.fromEntries(Object.entries(servers(path.join(listed, ".mcp.json"))).map(([name, entry]) => [name, entry.url])));
+const shipped = JSON.stringify(Object.fromEntries(Object.entries(servers(path.join(copilot, "mcp.json"))).map(([name, entry]) => [name, entry.url])));
+if (shipped !== wanted) {
+  problems.push(`plugins/koalafix-copilot/mcp.json names ${shipped}; it must name exactly the koalafix plugin's server, ${wanted}`);
+}
+
+// The Copilot adapter's tests (no network: their scripts are fakes).
+try {
+  execFileSync(process.execPath, ["--test", path.join(root, "tests", "copilot.test.mjs")], { cwd: root, stdio: "pipe" });
+} catch (error) {
+  problems.push(`tests/copilot.test.mjs failed:\n${String(error.stdout ?? "").split("\n").filter((line) => /^not ok|^# fail|✖/.test(line.trim())).join("\n")}`);
 }
 
 // Claude Code keeps one of two plugin servers at the same URL, so koalafix-auto's copy (the one whose helper sends the

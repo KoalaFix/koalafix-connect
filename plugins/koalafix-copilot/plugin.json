@@ -1,0 +1,14 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "koalafix-copilot",
+  "version": "0.1.0",
+  "description": "KoalaFix team memory for GitHub Copilot: the KoalaFix MCP server, the session routine, and hooks that put the team brief in front of each session and a recall on each prompt. The hooks need Node.js 22 or later.",
+  "author": {
+    "name": "KoalaFix",
+    "url": "https://koalafix.com"
+  },
+  "homepage": "https://koalafix.com",
+  "repository": "https://github.com/KoalaFix/koalafix-connect",
+  "license": "LicenseRef-KoalaFix-Proprietary",
+  "keywords": ["memory", "team-memory", "work-items", "mcp", "hooks"]
+}
