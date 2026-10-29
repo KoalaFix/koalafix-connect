@@ -5,8 +5,12 @@ description: The KoalaFix team memory routine. Use at the start of every task in
 
 ## KoalaFix (team memory)
 This project uses KoalaFix, the team's shared memory, through the `koalafix` MCP server.
-- New to KoalaFix here (no team facts yet, or the user asks to set it up): call `open` first and follow
-  `onboarding.next`.
+- On your first KoalaFix call in a chat or session, and whenever the user asks to set up: call `open` first.
+  When it returns `setup`, run that mission now, without waiting to be asked: read KoalaFix's own check-ins
+  and team facts first, map every person already in the space (never wait for anyone to connect), show one
+  review with one short question list, and apply it in one `remember({ setup })` with the user's yes word for
+  word in `user_words`. Invites and rank changes then wait for the user's one confirm on the dashboard's
+  Members page. With no `setup`, follow `onboarding.next` when there is one.
 - Before you act, and before you answer a question about how this team works, call `recall` with what you are
   about to do or answer, and read the verdict first. Then, at the start of a task, call
   `work` with action `start` naming the task, with its branch, PR or issue as `ref` (or the `paths` you will change) so overlapping work shows up.
@@ -14,7 +18,8 @@ This project uses KoalaFix, the team's shared memory, through the `koalafix` MCP
   unknown: ask the user.
 - Learned something durable, or the user decided something (a choice, a rule, a name): `remember` it. A decision
   about the team's shared work (code, conventions, process, ownership, handoffs) goes to lane `team` with kind
-  `decision`, in your own words: never quote the user (no `user_words`), and leave out anything personal or secret.
+  `decision`, in your own words: never quote the user (no `user_words`; set-up's one apply is the exception), and leave out
+  anything personal or secret.
   Confirmed a fact still holds: `verify`.
 - When the task is finished: call `work` with action `done`. Call `open` to see what is still open for you.
 - `share` and `settle` only with the user's yes.

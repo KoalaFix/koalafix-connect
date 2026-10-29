@@ -6,18 +6,14 @@ and done so the next session and the rest of the team can pick up where it left 
 
 ## Install
 
-Claude Code 2.1.275 or later, in one step:
+Claude (claude.ai, Cowork and Claude Code): the Claude marketplace lists one plugin, KoalaFix (`koalafix-auto`), which
+carries this plugin's server and skill plus the session hooks. In Claude Code 2.1.292 or later, one line:
 
 ```
-/plugin install koalafix --marketplace KoalaFix/koalafix-connect
+claude plugin install koalafix-auto --marketplace KoalaFix/koalafix-connect
 ```
 
-Or add the marketplace first, then install:
-
-```
-/plugin marketplace add KoalaFix/koalafix-connect
-/plugin install koalafix@koalafix-connect
-```
+On claude.ai, add the marketplace `KoalaFix/koalafix-connect` under Customize, Plugins, then add KoalaFix.
 
 Codex: `codex plugin marketplace add KoalaFix/koalafix-connect`, then `codex plugin add koalafix@koalafix-connect`.
 
@@ -55,7 +51,8 @@ choose to authenticate.
 - `share` and `settle` only with the user's yes.
 
 Session hooks (the brief at session start, a recall on every prompt, the session's decisions saved to the team) are not part
-of this plugin. Install `koalafix-auto@koalafix-connect` beside it for Claude Code, Codex and Cursor.
+of this plugin. In Claude, install `koalafix-auto` instead (it carries this plugin's server and skill); in Codex and
+Cursor, install it beside this one.
 
 ## Links
 
