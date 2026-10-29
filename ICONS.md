@@ -5,9 +5,11 @@ only accept an icon path inside the plugin folder and Cursor resolves its logo f
 
 ## Source mark
 
-The KoalaFix dashboard mark: a violet rounded square (`#6D28D9`) with a white K stroke, drawn on a 32 by 32 view
-box. The PNGs were rendered from that drawing at 2048 px and scaled down, so every size has the same proportions
-and transparent corners.
+The KoalaFix K (since 29 Oct 2026): a serif K in chestnut (`#552814`) with a green leaf (`#4E8A52`), centred on a
+cream rounded square (`#FAF6EC`, corner radius 112 on a 512 view box) with transparent corners. The source is
+`koalafix.svg`; the PNGs were rendered from it at 2048 px and scaled down, so every size has the same proportions.
+The brand originals live in the vault (`gtm/brand/k-logo-2026-10/koalafix-k-app-icon*`). The violet K of the first
+listings is retired: no listing, package or store page uses it.
 
 ## Files
 

@@ -1,6 +1,6 @@
 {
   "name": "koalafix",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "One memory for every AI tool on your team. Facts show who checked them and when.",
   "author": {
     "name": "KoalaFix",
@@ -41,8 +41,8 @@
       "What is open for me right now?",
       "Start tracking my task and tell me if anyone overlaps."
     ],
-    "brandColor": "#6D28D9",
-    "brandColorDark": "#8B5CF6",
+    "brandColor": "#552814",
+    "brandColorDark": "#4E8A52",
     "composerIcon": "./assets/koalafix-64.png",
     "logo": "./assets/koalafix-512.png"
   }
