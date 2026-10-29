@@ -2,7 +2,7 @@
   "name": "koalafix-auto",
   "displayName": "KoalaFix",
   "version": "0.5.0",
-  "description": "One memory for every AI tool on your team: KoalaFix's tools and skill in Claude chat, Cowork and Claude Code, and in Claude Code and Cowork its hooks make it automatic: the team brief and current decisions at session start, recall on each prompt, a warning before the agent edits a file a teammate has checked in on, work in progress started and closed for you, one browser sign-in on first use for the hooks and the KoalaFix tools alike. Chat runs no hooks. The hooks send each prompt (keys and tokens taken out, never logged) and the paths of files it names or the session edits to your KoalaFix server; teammates see your project, branch and those paths. The hooks need Node.js 22 or later on the machine.",
+  "description": "One memory for every AI tool on your team. In Claude chat: KoalaFix's tools and skill. In Claude Code and Cowork its hooks make it automatic: the team brief at session start, recall on each prompt, a warning before editing a file a teammate has checked in on, one browser sign-in. The hooks send each prompt (keys and tokens removed, never logged) and the file paths it names to your KoalaFix server; teammates see your project, branch and those paths. The hooks need Node.js 22+.",
   "author": {
     "name": "KoalaFix",
     "url": "https://koalafix.com"

@@ -9,7 +9,7 @@
     {
       "name": "koalafix-auto",
       "source": "./plugins/koalafix-auto",
-      "description": "One memory for every AI tool on your team: KoalaFix's tools and skill in Claude chat, Cowork and Claude Code, made automatic by hooks in Claude Code and Cowork (the team brief at session start, recall on each prompt, a warning before editing a file a teammate has checked in on, work in progress started and closed for you, one browser sign-in). Chat runs no hooks. The hooks send each prompt (keys and tokens taken out, never logged) and the paths of files it names or the session edits to your KoalaFix server; teammates see your project, branch and those paths. The hooks need Node.js 22 or later.",
+      "description": "One memory for every AI tool on your team. In Claude chat: KoalaFix's tools and skill. In Claude Code and Cowork its hooks make it automatic: the team brief at session start, recall on each prompt, a warning before editing a file a teammate has checked in on, one browser sign-in. The hooks send each prompt (keys and tokens removed, never logged) and the file paths it names to your KoalaFix server; teammates see your project, branch and those paths. The hooks need Node.js 22+.",
       "category": "development",
       "tags": [
         "memory",
