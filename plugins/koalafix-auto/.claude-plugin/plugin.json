@@ -1,7 +1,7 @@
 {
   "name": "koalafix-auto",
   "displayName": "KoalaFix",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "One memory for every AI tool on your team. In Claude chat and Cowork: KoalaFix's tools and skill. In Claude Code its hooks make it automatic: the team brief at session start, recall on each prompt, a warning before editing a file a teammate has checked in on, one browser sign-in. The hooks send each prompt (keys and tokens removed, never logged) and the file paths it names to your KoalaFix server; teammates see your project, branch and those paths. The hooks need Node.js 22+.",
   "author": {
     "name": "KoalaFix",
