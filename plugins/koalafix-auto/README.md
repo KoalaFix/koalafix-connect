@@ -1,7 +1,8 @@
 # KoalaFix (`koalafix-auto`)
 
 For Claude this is the one KoalaFix plugin: the server, the skill and the session hooks together, on claude.ai, in
-Cowork and in Claude Code. Chat runs no hooks, so there it adds the tools and the skill. In Codex and Cursor it adds
+Cowork and in Claude Code. Chat runs no hooks, and in Cowork they load but do nothing yet (there is no sign-in file
+there), so in both it adds the tools and the skill. In Codex and Cursor it adds
 the hooks beside the `koalafix` plugin. With the tools alone, the agent recalls and records work when it decides to;
 with the hooks, it happens on every session:
 
@@ -32,7 +33,7 @@ with the hooks, it happens on every session:
   your own sign-in, limited to the koalafix `remember` and `recall` tools, never saved as a session.
   `KALIBRATE_CAPTURE_AT_END=off` turns it off.
 - **First use:** with no KoalaFix credential on the machine, the agent shows you a sign-in link and a code. Approve
-  it once in the browser and the hooks turn on by themselves. In Claude Code and Cowork the KoalaFix tools use the
+  it once in the browser and the hooks turn on by themselves. In Claude Code the KoalaFix tools use the
   same sign-in, from the next session (or now, after Reconnect on `koalafix` in `/mcp`): this plugin carries its own
   copy of the `koalafix` server, which Claude Code connects in place of the `koalafix` plugin's when this plugin is
   listed first in your settings, as installing it does. See [Sign in](../../README.md#sign-in).
@@ -40,7 +41,8 @@ with the hooks, it happens on every session:
 ## Install
 
 claude.ai: add the marketplace `KoalaFix/koalafix-connect` under Customize, Plugins, then add **KoalaFix** and connect
-it; it loads in Cowork and Claude Code too. Claude Code on its own (nothing else to install):
+it; it loads in Cowork (tools and skill) and Claude Code (with its hooks) too. Claude Code on its own (nothing else to
+install):
 
 ```
 claude plugin install koalafix-auto --marketplace KoalaFix/koalafix-connect
@@ -70,7 +72,7 @@ this repository as a team marketplace.
   you name when it asks (up to eight space names go into its context for that question): **your teammates see
   them**. In a personal project, tell your agent when a session is not team work. The hooks never send the session's
   transcript and make no AI call of their own, except the one session-end run above. They write this session's state and a retry queue under `~/.kalibrate/`.
-- In Claude Code and Cowork, one more script, `hooks/scripts/headers.mjs --user`, is the `headersHelper` of this
+- In Claude Code, one more script, `hooks/scripts/headers.mjs --user`, is the `headersHelper` of this
   plugin's copy of the `koalafix` server. Claude Code runs it each time it connects that server. It reads no project
   file and prints an Authorization header with your credential only for exactly the server Claude Code is connecting
   to, over https; with none, it prints `{}` and Claude Code's own OAuth sign-in takes over.

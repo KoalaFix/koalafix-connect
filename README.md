@@ -16,9 +16,11 @@ MCP server address and the agent instructions. The KoalaFix service itself is no
   Cursor, and a context file in Gemini CLI.
 - The `koalafix` plugin contains no scripts, no hooks, no tokens and no telemetry, and runs nothing on your machine.
 - For Claude (chat, Cowork and Claude Code) the marketplace lists one plugin, **KoalaFix** (`koalafix-auto`): the
-  server, the skill and the session hooks together, so there is one thing to add. Chat runs no hooks and skips them; in
-  Claude Code and Cowork they make team memory automatic, and its copy of the KoalaFix server uses the hooks' sign-in,
-  so you sign in once.
+  server, the skill and the session hooks together, so there is one thing to add. Chat runs no hooks; Cowork loads them
+  but they do nothing there yet; in Claude Code they make team memory automatic, and its copy of the KoalaFix server
+  uses the hooks' sign-in, so you sign in once.
+- KoalaFix is invite-only for now: open the invite link your team sent and sign up from it before you add any plugin,
+  or the sign-in works and the server then turns your assistant away. No invite yet? Ask your team's admin.
 - In Codex and Cursor, the optional `koalafix-auto` plugin adds the hooks beside `koalafix`; the `koalafix-copilot`
   plugin (GitHub Copilot) and the Gemini CLI extension carry their own. The hooks run Node.js scripts on your machine;
   see [Session hooks](#session-hooks).
@@ -31,9 +33,11 @@ MCP server address and the agent instructions. The KoalaFix service itself is no
 
 On claude.ai, open Customize, then Plugins: click Add, then Add marketplace, paste `KoalaFix/koalafix-connect` and
 confirm; under Discover open **KoalaFix** and click Add; then on its Connectors tab click Connect and sign in. That one
-plugin is all: chat uses its tools and skill, and it loads in Cowork and in Claude Code (signed in with the same
-account) with its hooks. On Team and Enterprise an Owner can set it to Installed by default under Organization
-settings, Plugins & skills, so members add nothing; the Owner adds its connector under Connectors as well.
+plugin is all: chat and Cowork use its tools and skill, and it loads in Claude Code (signed in with the same account)
+with its hooks. On Team and Enterprise an Owner can upload this plugin's zip under Organization settings, Plugins &
+skills, and set it Installed by default, so members add nothing (organisation sync from GitHub takes only private
+repositories, and this one is public); the Owner adds its connector under Connectors as well, choosing Register
+automatically for the OAuth client.
 
 ### Claude Code
 
@@ -113,7 +117,8 @@ keeps the token; no file here holds one. To sign in ahead of time:
 The session hooks (`koalafix-auto`, and the Gemini CLI extension) sign in once on their own: at the first session
 start the agent shows you a link and a code to approve in the browser. See [Session hooks](#session-hooks).
 
-In Claude Code and Cowork, that one approval signs the KoalaFix tools in too, with no `/mcp` step: `koalafix-auto`
+In Claude Code, that one approval signs the KoalaFix tools in too, from the next session, with no `/mcp` sign-in (to
+connect them in the first session, run `/mcp`, pick `plugin:koalafix-auto:koalafix` and choose Reconnect): `koalafix-auto`
 carries its own copy of the `koalafix` server, at the same address, whose `headersHelper` (one of the hook scripts,
 `headers.mjs --user`) hands the server the hooks' sign-in. Claude Code connects only one of the two copies.
 
@@ -178,7 +183,7 @@ With only the `koalafix` plugin, the agent uses team memory when it decides to. 
 
 | Client | Where the hooks come from | Events |
 |---|---|---|
-| Claude Code, Cowork | `koalafix-auto` plugin | SessionStart, UserPromptSubmit, Stop, SessionEnd |
+| Claude Code (Cowork loads them; they do nothing there yet) | `koalafix-auto` plugin | SessionStart, UserPromptSubmit, Stop, SessionEnd |
 | Codex (CLI and desktop) | `koalafix-auto` plugin, after you trust it in `/hooks` | SessionStart, UserPromptSubmit, Stop, SessionEnd |
 | Cursor | `koalafix-auto` plugin (its hooks run from `${CURSOR_PLUGIN_ROOT}`) | sessionStart, beforeSubmitPrompt, stop, sessionEnd |
 | Gemini CLI | this extension | SessionStart, BeforeAgent, AfterAgent, SessionEnd |
