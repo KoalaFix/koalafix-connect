@@ -17,6 +17,8 @@
 //    exactly the koalafix plugin's server, and the adapter's tests pass.
 // 7. koalafix-auto's copy of the koalafix server (Claude Code) has the koalafix plugin's URL and runs a copied helper
 //    with --user, and the listed plugin names no helper.
+// 8. The Claude marketplace lists one plugin, koalafix-auto, whole on its own: no dependency (claude.ai skips them, so
+//    people had to add koalafix by hand) and its own copy of the skill at a path only its Claude manifest names.
 // Exits 1 and names each problem.
 
 import { execFileSync } from "node:child_process";
@@ -177,6 +179,24 @@ if (autoServer === undefined || autoServer.url !== listedServer?.url) {
 }
 if (files.some((file) => rel(file).startsWith("plugins/koalafix/") && /\.json$/.test(file) && read(file).includes("headersHelper"))) {
   problems.push("plugins/koalafix names a headersHelper: the listed plugin must run nothing on the machine");
+}
+
+const claudeMarket = JSON.parse(read(path.join(root, ".claude-plugin", "marketplace.json")));
+const claudeListed = (claudeMarket.plugins ?? []).map((entry) => `${entry.name} ${entry.source}`);
+if (claudeListed.join("|") !== "koalafix-auto ./plugins/koalafix-auto") {
+  problems.push(`.claude-plugin/marketplace.json must list koalafix-auto alone, from ./plugins/koalafix-auto (one plugin to add on claude.ai); it lists: ${claudeListed.join(", ") || "nothing"}`);
+}
+const autoClaude = JSON.parse(read(autoManifest));
+if (autoClaude.dependencies !== undefined) {
+  problems.push(`${rel(autoManifest)} names dependencies: claude.ai skips them, so koalafix-auto must carry everything itself`);
+}
+if (autoClaude.skills !== "./claude-skills/" || !fs.existsSync(path.join(root, "plugins", "koalafix-auto", "claude-skills", "koalafix", "SKILL.md"))) {
+  problems.push(`${rel(autoManifest)} must name skills "./claude-skills/", which holds the copy of the koalafix skill (run: node scripts/copies.mjs)`);
+}
+for (const other of [".codex-plugin", ".cursor-plugin"].map((dir) => path.join(root, "plugins", "koalafix-auto", dir, "plugin.json"))) {
+  if (fs.existsSync(other) && read(other).includes("claude-skills")) {
+    problems.push(`${rel(other)} names claude-skills: Codex and Cursor list koalafix beside koalafix-auto and would load the skill twice`);
+  }
 }
 
 if (problems.length > 0) {

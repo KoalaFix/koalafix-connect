@@ -1,7 +1,9 @@
-# KoalaFix automatic memory
+# KoalaFix (`koalafix-auto`)
 
-This plugin makes KoalaFix team memory automatic in Claude Code, Cowork, Codex and Cursor. With only the `koalafix`
-plugin, the agent recalls and records work when it decides to. With this one, hooks do it on every session:
+For Claude this is the one KoalaFix plugin: the server, the skill and the session hooks together, on claude.ai, in
+Cowork and in Claude Code. Chat runs no hooks, so there it adds the tools and the skill. In Codex and Cursor it adds
+the hooks beside the `koalafix` plugin. With the tools alone, the agent recalls and records work when it decides to;
+with the hooks, it happens on every session:
 
 - **Session start:** the team's brief goes in front of the session: facts, the team's current decisions (the ones
   that name this repository first), teammates' work in progress and open items. The first time the hooks run on your
@@ -37,12 +39,14 @@ plugin, the agent recalls and records work when it decides to. With this one, ho
 
 ## Install
 
-Claude Code (this also installs the `koalafix` plugin):
+claude.ai: add the marketplace `KoalaFix/koalafix-connect` under Customize, Plugins, then add **KoalaFix** and connect
+it; it loads in Cowork and Claude Code too. Claude Code on its own (nothing else to install):
 
 ```
-/plugin marketplace add KoalaFix/koalafix-connect
-/plugin install koalafix-auto@koalafix-connect
+claude plugin install koalafix-auto --marketplace KoalaFix/koalafix-connect
 ```
+
+Before 2.1.292: `/plugin marketplace add KoalaFix/koalafix-connect`, then `/plugin install koalafix-auto@koalafix-connect`.
 
 Codex: `codex plugin marketplace add KoalaFix/koalafix-connect`, then `codex plugin add koalafix@koalafix-connect` and
 `codex plugin add koalafix-auto@koalafix-connect`, then run `/hooks` once and trust the KoalaFix hooks. Cursor: add

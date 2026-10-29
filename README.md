@@ -15,30 +15,44 @@ MCP server address and the agent instructions. The KoalaFix service itself is no
 - Give the agent the KoalaFix session routine: a skill in Claude Code and Codex, an always-applied rule in
   Cursor, and a context file in Gemini CLI.
 - The `koalafix` plugin contains no scripts, no hooks, no tokens and no telemetry, and runs nothing on your machine.
-- The optional `koalafix-auto` plugin (Claude Code, Cowork, Codex, Cursor), the `koalafix-copilot` plugin (GitHub
-  Copilot) and the Gemini CLI extension add session hooks that make team memory automatic. They run Node.js scripts on
-  your machine; see [Session hooks](#session-hooks). In Claude Code and Cowork, `koalafix-auto` also carries a copy of
-  the KoalaFix server that uses the hooks' sign-in, so you sign in once.
+- For Claude (chat, Cowork and Claude Code) the marketplace lists one plugin, **KoalaFix** (`koalafix-auto`): the
+  server, the skill and the session hooks together, so there is one thing to add. Chat runs no hooks and skips them; in
+  Claude Code and Cowork they make team memory automatic, and its copy of the KoalaFix server uses the hooks' sign-in,
+  so you sign in once.
+- In Codex and Cursor, the optional `koalafix-auto` plugin adds the hooks beside `koalafix`; the `koalafix-copilot`
+  plugin (GitHub Copilot) and the Gemini CLI extension carry their own. The hooks run Node.js scripts on your machine;
+  see [Session hooks](#session-hooks).
 - Kalibrate is the name of the engine behind KoalaFix, which is why some files and settings here say kalibrate
   (`~/.kalibrate/`, the `KALIBRATE_*` variables).
 
 ## Install
 
+### Claude (claude.ai, the desktop and mobile apps, Cowork)
+
+On claude.ai, open Customize, then Plugins: click Add, then Add marketplace, paste `KoalaFix/koalafix-connect` and
+confirm; under Discover open **KoalaFix** and click Add; then on its Connectors tab click Connect and sign in. That one
+plugin is all: chat uses its tools and skill, and it loads in Cowork and in Claude Code (signed in with the same
+account) with its hooks. On Team and Enterprise an Owner can set it to Installed by default under Organization
+settings, Plugins & skills, so members add nothing; the Owner adds its connector under Connectors as well.
+
 ### Claude Code
+
+On Claude Code 2.1.292 or later, one line from a shell:
+
+```
+claude plugin install koalafix-auto --marketplace KoalaFix/koalafix-connect
+```
+
+On older releases, or inside a session:
 
 ```
 /plugin marketplace add KoalaFix/koalafix-connect
 /plugin install koalafix-auto@koalafix-connect
 ```
 
-`koalafix-auto` brings the `koalafix` plugin with it. For the tools without hooks, install `koalafix@koalafix-connect`
-instead.
-
-On Claude Code 2.1.275 or later, one step installs the `koalafix` plugin only (no hooks):
-`/plugin install koalafix --marketplace KoalaFix/koalafix-connect`.
-
-From a shell: `claude plugin marketplace add KoalaFix/koalafix-connect`, then
-`claude plugin install koalafix-auto@koalafix-connect`.
+It carries the server, the skill and the hooks; nothing else to install. Installed `koalafix` before? Remove it
+(`claude plugin uninstall koalafix@koalafix-connect`): the Claude marketplace no longer lists it, and `koalafix-auto`
+has its own copy of the skill.
 
 ### Codex
 
