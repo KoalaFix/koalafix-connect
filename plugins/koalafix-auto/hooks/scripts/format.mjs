@@ -5,7 +5,7 @@
 // real server's shapes: the session brief is plain text (Part A 4.6), and `open` answers `structuredContent`
 // `{ items: OpenItemLine[] }` (packages/core/src/contract/tools-io.ts).
 
-import { defuse, framed } from "./memory-frame.mjs";
+import { defuse, framed, framedRules } from "./memory-frame.mjs";
 
 /** Claude Code caps a hook's context at 10,000 characters; the hook stays under it. */
 export const MAX_CONTEXT_CHARS = 9500;
@@ -33,6 +33,25 @@ function ownLine(line) {
   return OWN_LINES.has(line) || SETUP_LINE.test(line);
 }
 
+/** The brief's heading for the team's confirmed rules, word for word as the server writes it (mcp-server brief-rules.ts). */
+export const RULES_HEADING = "Standing rules (confirmed by the team; follow them):";
+
+/**
+ * The confirmed rules out of the memory lines: the lines under RULES_HEADING up to the next blank line (ADR-0064). Only
+ * the server writes that exact line: a teammate's text in a brief always starts "- ", so it cannot fake the heading.
+ */
+function takeRules(memory) {
+  const at = memory.indexOf(RULES_HEADING);
+  if (at === -1) {
+    return { rules: [], rest: memory };
+  }
+  let end = at + 1;
+  while (end < memory.length && memory[end] !== "") {
+    end++;
+  }
+  return { rules: memory.slice(at + 1, end), rest: [...memory.slice(0, at), ...memory.slice(end + 1)] };
+}
+
 /** The brief as KoalaFix's lines at its head (title, set-up line), the team memory, and KoalaFix's lines at its foot. */
 function splitBrief(brief) {
   const lines = brief.split(/\r?\n/);
@@ -51,10 +70,13 @@ function splitBrief(brief) {
  * The SessionStart context: the server's brief with its team memory (facts, decisions, disputes, teammates' work, open
  * items) inside the data frame and KoalaFix's own lines outside it (memory-frame.mjs, KOA2-381). The same brief gives
  * the same bytes, so the client's prompt cache holds. Cut to at most 9,500 characters only if a server sends more
- * than its own 2,000-token cap, inside the frame, which still closes.
+ * than its own 2,000-token cap, inside the frame, which still closes. The standing rules the team confirmed go first,
+ * in their own frame (ADR-0064), and are never cut.
  */
 export function buildContext(brief) {
-  const { before, memory, after } = splitBrief(brief);
+  const { before: head, memory: all, after } = splitBrief(brief);
+  const { rules, rest: memory } = takeRules(all);
+  const before = [...head, ...framedRules(rules)];
   const whole = framed(before, memory, after);
   if (whole.length <= MAX_CONTEXT_CHARS) {
     return whole;

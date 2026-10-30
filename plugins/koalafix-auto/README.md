@@ -28,6 +28,18 @@ with the hooks, it happens on every session:
   script's answer stays its own; `KALIBRATE_CAPTURE=always` or `off` changes that. In several spaces with none named
   after the project, you are asked which one once, and your pick is remembered for that folder on your machine. Also
   what is open for you (a line in the client's hook log).
+- **Before an edit (Claude Code):** in a folder where the prompt hook started your work-in-progress lease (the
+  team's folders, above), before the session's first edit of a file (Edit, Write, MultiEdit, NotebookEdit) one read
+  asks your KoalaFix server whether one of your own check-ins covers it and whether a teammate's covers it too, inside
+  1 second. When a teammate is on it, the agent gets a note naming who, what and since when, once per check-in. With
+  no check-in of your own, it gets a note once a session to check in with the `work` tool. It never stops an edit
+  unless you set `KALIBRATE_GATE=block` (then it denies an unchecked edit, as a `koalafix init` project does, in every
+  team folder); `off` asks nothing. A covered file asks nothing again that session. In a personal folder it asks
+  nothing and sends nothing.
+- **Subagents (Claude Code):** none of the hooks above run inside a subagent, so a subagent that can call recall
+  (`general-purpose`, `Explore`, `Plan`, or a custom agent given the KoalaFix tools) gets two lines at its start:
+  recall with its own task and read the verdict before acting, and leave saving to the session that started it.
+  Agents with a fixed set of other tools get nothing. No network call.
 - **Session end (Claude Code):** if the last turns were not covered, one short background
   `claude -p --resume <session> --fork-session --no-session-persistence` run saves their decisions: one AI call on
   your own sign-in, limited to the koalafix `remember` and `recall` tools, never saved as a session.
@@ -57,7 +69,8 @@ this repository as a team marketplace.
 
 ## What it runs and sends
 
-- Four Node.js scripts (Node 22 or later) in `hooks/scripts/`, the same ones `koalafix init` installs. Claude Code
+- Four Node.js scripts (Node 22 or later) in `hooks/scripts/`, the same ones `koalafix init` installs, and in Claude
+  Code two more: the first-edit check (`pre-tool.mjs`), and one for subagents that reads only local files. Claude Code
   starts them with no shell between; Codex on macOS and Linux goes through `hooks/scripts/run.sh`, which only finds
   Node and starts the script. Without Node the hooks do nothing for KoalaFix (a client may show a one-line hook
   error).
@@ -66,7 +79,10 @@ this repository as a team marketplace.
   like a token or key taken out, marked so the server keeps no log of it); with it, the paths of up to 20 files the
   prompt is about (paths it names that exist in the project, and files this session's agent edited, read from the end
   of your client's own transcript on your machine: only the paths leave it), which go on your work-in-progress lease
-  where **your teammates see them**; at session start, the repository's or folder's name; and, each time the agent is asked for the decisions
+  where **your teammates see them**; in a team folder, before the session's first edit of a file, that file's path
+  from the repository's top (the project folder's outside a repository), the edit tool's name, the repository's name,
+  the space you picked for the folder and the time of the session's last unchecked edit of it, to check it against
+  check-ins (the server logs the answer, the tool and how many paths, never the paths); at session start, the repository's or folder's name; and, each time the agent is asked for the decisions
   (again next turn if it fails), a request for the list of your spaces. The session's decisions are saved by your agent with the `remember`
   tool, in its words, to your only space whatever folder you work in, or the one named after the project, or the one
   you name when it asks (up to eight space names go into its context for that question): **your teammates see
