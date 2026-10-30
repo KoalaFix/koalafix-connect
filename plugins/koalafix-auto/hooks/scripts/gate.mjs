@@ -39,10 +39,13 @@ function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** `KALIBRATE_GATE`: off, warn or block. Anything else, or unset, is block (the default, ADR-0042 6). */
-export function gateMode(env = process.env) {
+/**
+ * `KALIBRATE_GATE`: off, warn or block. Anything else, or unset, is `fallback`: block for a `koalafix init` project
+ * (ADR-0042 6), warn for a plugin's `--user` install, which nobody configured for the gate (KOA2-558).
+ */
+export function gateMode(env = process.env, fallback = "block") {
   const value = String(env.KALIBRATE_GATE ?? "").trim().toLowerCase();
-  return value === "off" || value === "warn" ? value : "block";
+  return value === "off" || value === "warn" || value === "block" ? value : fallback;
 }
 
 /** core's `normalisePath`: forward slashes, no `./` prefix, no trailing slash; "." is "" (the whole tree). */
@@ -211,9 +214,26 @@ export function gateOutput(answer, mode) {
     return `${JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: answer.message } })}\n`;
   }
   if (answer.decision === "block" || answer.decision === "warn") {
-    return `${JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: answer.message } })}\n`;
+    // The server's block message asks for the edit again; in warn mode the edit has gone ahead, so the note says so.
+    const message = answer.decision === "block" ? `${answer.message} ${WARN_MODE_NOTE}` : answer.message;
+    return `${JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: message } })}\n`;
   }
   return "";
+}
+
+/** What a block in warn mode adds to the server's message: the edit was not stopped, so there is nothing to redo. */
+export const WARN_MODE_NOTE = "(This edit was not stopped and need not be made again; check in before the next one.)";
+
+/**
+ * Removes the session's gate file at session end (session-end.mjs), so the sessions folder does not grow. Best effort:
+ * a file it cannot remove must never stop the lease close that follows.
+ */
+export function removeGate(key, env = process.env) {
+  try {
+    fs.rmSync(gateStatePath(key, env), { force: true });
+  } catch {
+    // Left behind: harmless, since the gate never reads another session's file.
+  }
 }
 
 /** The session's gate file, apart from wip.mjs's `<key>.json`. */
@@ -221,16 +241,22 @@ export function gateStatePath(key, env = process.env) {
   return path.join(kalibrateHome(env), "sessions", `${key}.gate.json`);
 }
 
-/** The session's gate cache: `{ scopes, blockedAt, blockedPaths, warned }`, empty when there is none or it cannot be read. */
+/** A session's gate cache before its first check. */
+export const EMPTY_GATE = Object.freeze({ scopes: [], blockedAt: null, blockedPaths: [], warned: [], nudged: false });
+
+/**
+ * The session's gate cache: `{ scopes, blockedAt, blockedPaths, warned, nudged }`, empty when there is none or it
+ * cannot be read. `nudged` is true once warn mode has shown the check-in note.
+ */
 export function readGate(key, env = process.env) {
-  const empty = { scopes: [], blockedAt: null, blockedPaths: [], warned: [] };
+  const empty = { ...EMPTY_GATE };
   try {
     const parsed = JSON.parse(fs.readFileSync(gateStatePath(key, env), "utf8"));
     if (!isRecord(parsed)) {
       return empty;
     }
     const strings = (value) => (Array.isArray(value) ? value.filter((entry) => typeof entry === "string") : []);
-    return { scopes: strings(parsed.scopes), blockedAt: typeof parsed.blockedAt === "string" ? parsed.blockedAt : null, blockedPaths: strings(parsed.blockedPaths), warned: strings(parsed.warned) };
+    return { scopes: strings(parsed.scopes), blockedAt: typeof parsed.blockedAt === "string" ? parsed.blockedAt : null, blockedPaths: strings(parsed.blockedPaths), warned: strings(parsed.warned), nudged: parsed.nudged === true };
   } catch {
     return empty;
   }
@@ -269,25 +295,41 @@ function teammateLeases(answer) {
  * The cache after an answer. Allow and warn add the answer's `scope` to the scopes (the asked paths when it names
  * none), drop the blocked paths they overlap, and remember a warn's teammate leases so each is shown once. A block adds
  * its paths to the blocked ones with the answer's as_of as the block time; it caches nothing in block mode, and in warn
- * mode (where the block only shows a note) it caches the asked paths so the note shows once.
+ * mode (where the block only shows a note) it caches the asked paths, marks the check-in note shown and remembers the
+ * teammates it named, so the note shows once a session and each teammate once.
  */
 export function nextGate(state, answer, asked, mode = "block") {
+  const warned = [...new Set([...state.warned, ...teammateLeases(answer)])].slice(-MAX_SCOPES);
   if (answer.decision === "block") {
     const blockedAt = typeof answer.as_of === "string" ? answer.as_of : state.blockedAt;
     const blockedPaths = [...new Set([...state.blockedPaths, ...asked])].slice(-MAX_SCOPES);
+    if (mode !== "warn") {
+      return { ...state, blockedAt, blockedPaths };
+    }
     // In warn mode the block was only a note: the asked paths count as seen, so the note shows once.
-    const scopes = mode === "warn" ? [...new Set([...state.scopes, ...asked])].slice(-MAX_SCOPES) : state.scopes;
-    return { ...state, scopes, blockedAt, blockedPaths };
+    const scopes = [...new Set([...state.scopes, ...asked])].slice(-MAX_SCOPES);
+    return { scopes, blockedAt, blockedPaths, warned, nudged: true };
   }
   const given = Array.isArray(answer.scope) ? answer.scope.filter((entry) => typeof entry === "string").map(normalisePath) : [];
   const scopes = [...new Set([...state.scopes, ...(given.length > 0 ? given : asked)])].slice(-MAX_SCOPES);
   const blockedPaths = state.blockedPaths.filter((blocked) => !asked.some((file) => overlap(file, blocked)));
-  const warned = [...new Set([...state.warned, ...teammateLeases(answer)])].slice(-MAX_SCOPES);
-  return { scopes, blockedAt: blockedPaths.length === 0 ? null : state.blockedAt, blockedPaths, warned };
+  return { scopes, blockedAt: blockedPaths.length === 0 ? null : state.blockedAt, blockedPaths, warned, nudged: state.nudged === true };
 }
 
 /** Whether every teammate lease a warn names was already shown this session (so it is not shown again). */
 export function alreadyWarned(state, answer) {
   const leases = teammateLeases(answer);
   return answer.decision === "warn" && leases.length > 0 && leases.every((lease) => state.warned.includes(lease));
+}
+
+/**
+ * Whether the answer would only repeat what the session was already shown: a warn whose teammates were all shown, or,
+ * in warn mode, a block after the check-in note was shown that names no teammate not shown before. A block in block
+ * mode always shows (it denies the edit).
+ */
+export function alreadyShown(state, answer, mode) {
+  if (answer.decision === "warn") {
+    return alreadyWarned(state, answer);
+  }
+  return answer.decision === "block" && mode === "warn" && state.nudged === true && teammateLeases(answer).every((lease) => state.warned.includes(lease));
 }

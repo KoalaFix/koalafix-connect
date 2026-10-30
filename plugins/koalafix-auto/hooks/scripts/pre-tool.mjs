@@ -5,7 +5,8 @@
 // NotebookEdit. Before the session's first edit of a path it asks `GET /api/v1/gate` whether the person has checked in
 // for it. An allow or warn is cached for the session as the covering lease's paths, so a later edit inside them asks
 // nothing; a block is not cached and denies the edit with the server's check-in instruction. `KALIBRATE_GATE` is off,
-// warn or block (default block): warn turns a block into a note, off asks nothing.
+// warn or block (default block, or warn for a plugin's `--user` install, KOA2-558): warn turns a block into a note,
+// shown once a session unless it names a teammate not shown before; off asks nothing.
 // It never prints `permissionDecision: "allow"`, so the person's own permission prompt still runs. It fails open: on
 // any problem (no credential, no network, a timeout, an HTTP error, a cool-off, bad JSON) it prints nothing on stdout,
 // one line on stderr starting `koalafix: gate`, and exits 0. Budget 1 s (KALIBRATE_HOOK_BUDGET_MS overrides).
@@ -14,13 +15,13 @@
 import { budgetFrom, finish, messageOf, readApi, runWithBudget } from "./connect.mjs";
 import { readHookInput } from "./project.mjs";
 import { locateHook, parseHookArgs } from "./client.mjs";
-import { GATE_BUDGET_MS, alreadyWarned, allInScope, blockedAtFor, editPaths, gateBudget, gateMode, gateOutput, gateRepo, gateRoute, nextGate, readAnswer, readGate, realInput, repoRoot, writeGate } from "./gate.mjs";
+import { EMPTY_GATE, GATE_BUDGET_MS, allInScope, alreadyShown, blockedAtFor, editPaths, gateBudget, gateMode, gateOutput, gateRepo, gateRoute, nextGate, readAnswer, readGate, realInput, repoRoot, writeGate } from "./gate.mjs";
 import { pickedSpace } from "./spaces.mjs";
 import { sessionIdOf, sessionKey } from "./wip.mjs";
 
 const env = process.env;
-const mode = gateMode(env);
 const args = parseHookArgs(process.argv.slice(2));
+const mode = gateMode(env, args.user ? "warn" : "block");
 let stdout = "";
 let notice = "";
 if (mode !== "off") {
@@ -44,7 +45,7 @@ if (mode !== "off") {
     }
     const sessionId = sessionIdOf(input);
     const key = sessionId === null ? null : sessionKey(found.root, sessionId);
-    const state = key === null ? { scopes: [], blockedAt: null, blockedPaths: [], warned: [] } : readGate(key, env);
+    const state = key === null ? { ...EMPTY_GATE } : readGate(key, env);
     if (allInScope(paths, state.scopes)) {
       return;
     }
@@ -53,7 +54,7 @@ if (mode !== "off") {
     if (answer === null) {
       throw new Error("GET /api/v1/gate answered something that is not a gate answer");
     }
-    if (!alreadyWarned(state, answer)) {
+    if (!alreadyShown(state, answer, mode)) {
       stdout = gateOutput(answer, mode);
     }
     if (key !== null) {
