@@ -222,7 +222,7 @@ export function gateOutput(answer, mode) {
 }
 
 /** What a block in warn mode adds to the server's message: the edit was not stopped, so there is nothing to redo. */
-export const WARN_MODE_NOTE = "(This edit was not stopped and need not be made again; check in before the next one.)";
+export const WARN_MODE_NOTE = "(The gate did not stop this edit, so there is nothing to redo; check in before your next one.)";
 
 /**
  * Removes the session's gate file at session end (session-end.mjs), so the sessions folder does not grow. Best effort:
@@ -241,15 +241,17 @@ export function gateStatePath(key, env = process.env) {
   return path.join(kalibrateHome(env), "sessions", `${key}.gate.json`);
 }
 
-/** A session's gate cache before its first check. */
-export const EMPTY_GATE = Object.freeze({ scopes: [], blockedAt: null, blockedPaths: [], warned: [], nudged: false });
+/** A session's gate cache before its first check, new each call so no caller shares its arrays. */
+export function emptyGate() {
+  return { scopes: [], blockedAt: null, blockedPaths: [], warned: [], nudged: false };
+}
 
 /**
  * The session's gate cache: `{ scopes, blockedAt, blockedPaths, warned, nudged }`, empty when there is none or it
  * cannot be read. `nudged` is true once warn mode has shown the check-in note.
  */
 export function readGate(key, env = process.env) {
-  const empty = { ...EMPTY_GATE };
+  const empty = emptyGate();
   try {
     const parsed = JSON.parse(fs.readFileSync(gateStatePath(key, env), "utf8"));
     if (!isRecord(parsed)) {
