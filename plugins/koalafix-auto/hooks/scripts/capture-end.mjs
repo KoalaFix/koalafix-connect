@@ -25,13 +25,18 @@ import { pickedSpace } from "./spaces.mjs";
 
 /**
  * The tools the last pass may call: the koalafix-auto plugin's copy of the server, the koalafix plugin's (whichever of
- * the two Claude Code keeps), then a `koalafix init` project's.
+ * the two Claude Code keeps), a claude.ai connector's (Claude Code keeps it in place of a plugin's server at the same
+ * address, named as the person or the Connect panel named it), then a `koalafix init` project's.
  */
 export const END_TOOLS = [
   "mcp__plugin_koalafix-auto_koalafix__remember",
   "mcp__plugin_koalafix-auto_koalafix__recall",
   "mcp__plugin_koalafix_koalafix__remember",
   "mcp__plugin_koalafix_koalafix__recall",
+  "mcp__claude_ai_koalafix__remember",
+  "mcp__claude_ai_koalafix__recall",
+  "mcp__claude_ai_KoalaFix__remember",
+  "mcp__claude_ai_KoalaFix__recall",
   "mcp__koalafix__remember",
   "mcp__koalafix__recall",
 ];
