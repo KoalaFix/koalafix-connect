@@ -13,9 +13,14 @@
  * @typedef {{ words: Word[], redirects: Redirect[] }} Command
  */
 
-/** The index just past the `)` that closes the `(` at `open`, skipping quoted text; the end of `source` when unclosed. */
-export function closingParen(source, open) {
+/**
+ * The index just past the bracket that closes the one at `open` (`(` by default, or `{` or `[`), skipping quoted text
+ * and heredoc bodies (a `1)` line inside `$(cat <<EOF ... EOF)` closes nothing); the end of `source` when unclosed.
+ */
+export function closingParen(source, open, [opener, closer] = ["(", ")"]) {
   let depth = 0;
+  /** @type {{ delimiter: string, strip: boolean }[]} */
+  const heredocs = [];
   for (let i = open; i < source.length; i++) {
     const c = source[i];
     if (c === "'" || c === '"') {
@@ -24,9 +29,17 @@ export function closingParen(source, open) {
         return source.length;
       }
       i = end;
-    } else if (c === "(") {
+    } else if (c === "<" && source[i + 1] === "<" && source[i + 2] !== "<") {
+      const match = /^<<(-?)\s*(['"]?)([\w.-]+)\2/.exec(source.slice(i));
+      if (match !== null) {
+        heredocs.push({ delimiter: match[3], strip: match[1] === "-" });
+        i += match[0].length - 1;
+      }
+    } else if (c === "\n" && heredocs.length > 0) {
+      i = skipHeredocs(source, i + 1, heredocs) - 1;
+    } else if (c === opener) {
       depth++;
-    } else if (c === ")") {
+    } else if (c === closer) {
       depth--;
       if (depth === 0) {
         return i + 1;
@@ -105,6 +118,11 @@ function reader() {
       redirects = [];
       pending = null;
     },
+    /** Ends the current command and marks a subshell opening or closing, so a `cd` inside it stays inside. */
+    group(kind) {
+      self.endCommand();
+      commands.push({ words: [], redirects: [], group: kind });
+    },
   };
   return self;
 }
@@ -166,10 +184,20 @@ export function bashCommands(source) {
         }
       }
       i++;
-    } else if (c === "$" && next === "(") {
-      const end = closingParen(s, i + 1);
+    } else if (c === "$" && (next === "(" || next === "{" || next === "[")) {
+      // $(...), $((...)), ${...} and $[...] are one dynamic unit, whatever `>` they hold.
+      const end = closingParen(s, i + 1, next === "(" ? ["(", ")"] : next === "{" ? ["{", "}"] : ["[", "]"]);
       r.add(s.slice(i, end), { dynamic: true });
       i = end;
+    } else if (c === "(" && next === "(" && r.word === null) {
+      // An arithmetic command, `(( a > b ))` or `for ((...))`: a comparison, never a redirection.
+      const end = closingParen(s, i);
+      r.add(s.slice(i, end), { dynamic: true });
+      i = end;
+    } else if ((c === ">" || c === "<") && r.words.some((word) => word.text === "[[" && !word.quoted) && !r.words.some((word) => word.text === "]]")) {
+      // Inside `[[ ... ]]`, `>` and `<` compare strings.
+      r.add(c, { dynamic: true });
+      i++;
     } else if (c === "`") {
       const end = s.indexOf("`", i + 1);
       const stop = end < 0 ? s.length : end + 1;
@@ -184,7 +212,10 @@ export function bashCommands(source) {
     } else if (c === "\n") {
       r.endCommand();
       i = skipHeredocs(s, i + 1, r.heredocs);
-    } else if (c === ";" || c === "(" || c === ")" || c === "|" || (c === "&" && next !== ">")) {
+    } else if (c === "(" || c === ")") {
+      r.group(c === "(" ? "open" : "close");
+      i++;
+    } else if (c === ";" || c === "|" || (c === "&" && next !== ">")) {
       r.endCommand();
       i += (c === "&" && next === "&") || (c === "|" && (next === "|" || next === "&")) || (c === ";" && next === ";") ? 2 : 1;
     } else if ((c === "<" || c === ">") && next === "(") {
@@ -290,10 +321,15 @@ export function powershellCommands(source) {
         }
       }
       i++;
-    } else if (c === "$" && next === "(") {
-      const end = closingParen(s, i + 1);
+    } else if ((c === "$" || c === "@") && (next === "(" || next === "{")) {
+      // $(...), ${env:x}, @(...) arrays and @{...} hashtables are one dynamic unit.
+      const end = closingParen(s, i + 1, next === "(" ? ["(", ")"] : ["{", "}"]);
       r.add(s.slice(i, end), { dynamic: true });
       i = end;
+    } else if (c === "@" && /[A-Za-z_]/.test(next ?? "")) {
+      // A splat (`Set-Content @args`) names its parameters in a variable.
+      r.add(c, { dynamic: true });
+      i++;
     } else if (c === "(" && (r.words.length > 0 || r.pending !== null || r.word !== null)) {
       const end = closingParen(s, i);
       r.add(s.slice(i, end), { dynamic: true });

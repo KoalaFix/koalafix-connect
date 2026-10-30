@@ -23,6 +23,9 @@ export function shellOf(toolName) {
   return typeof toolName === "string" && Object.hasOwn(SHELLS, toolName) ? SHELLS[toolName] : null;
 }
 
+/** The most named files shellPaths looks at on disk, whatever the command lists. */
+const MAX_LOOKED = 200;
+
 /** Redirections that write a file. `>&` with a file target is Bash's old spelling of `&>`. */
 const WRITE_OPS = new Set([">", ">>", "&>", "&>>", "<>", ">&", ">>&"]);
 
@@ -66,11 +69,11 @@ const MANIFESTS = {
 };
 
 /** Subcommands that `install` only when they name packages (`npm install` alone writes no manifest). */
-const NEEDS_NAMES = new Set(["install", "i"]);
+const NEEDS_NAMES = new Set(["install", "i", "get"]);
 
 /** PowerShell aliases for the cmdlets this reads (the Bash tool's `rm`, `cp` and so on stay Bash's). */
 const PS_ALIASES = {
-  sc: "set-content",
+  // No `sc`: PowerShell 7 dropped that alias, and `sc` there (and `sc.exe` anywhere) is the service control program.
   ac: "add-content",
   clc: "clear-content",
   ni: "new-item",
@@ -101,10 +104,21 @@ const PS_ALIASES = {
 const PS_WRITERS = new Set(["set-content", "add-content", "clear-content", "out-file", "new-item", "mkdir", "remove-item", "rename-item", "tee-object", "copy-item", "move-item"]);
 
 /** PowerShell parameters that take a value, so the value is not read as a positional argument. */
-const PS_VALUES = new Set(["path", "literalpath", "filepath", "destination", "value", "encoding", "itemtype", "type", "name", "newname", "filter", "include", "exclude", "stream", "width", "inputobject", "delimiter", "credential", "erroraction", "warningaction", "informationaction", "outvariable", "errorvariable", "pipelinevariable", "outbuffer", "variable"]);
+const PS_VALUES = new Set(["path", "literalpath", "filepath", "destination", "value", "encoding", "itemtype", "type", "name", "newname", "filter", "include", "exclude", "stream", "width", "inputobject", "delimiter", "credential", "erroraction", "warningaction", "informationaction", "outvariable", "errorvariable", "pipelinevariable", "outbuffer", "variable", "ea", "wa", "ia", "ev", "ov", "ob", "pv", "iv", "infa", "target", "tosession", "fromsession"]);
 
-/** `[IO.File]::WriteAllText('a', ...)` and its kin: .NET calls whose first argument is a file they write. */
-const DOTNET = /\[(?:System\.)?IO\.File\]::(?:WriteAll\w*|AppendAll\w*|AppendText|Create\w*|Delete|Copy|Move|Replace|Open(?:Write)?)\(\s*(['"])([^'"$]+)\1/gi;
+/**
+ * `[IO.File]::WriteAllText('a', ...)` and its kin, matched at the start of a word: .NET calls that write the file their
+ * first argument names, or for Copy, Move and Replace their second.
+ */
+const DOTNET = /^\[(?:System\.)?IO\.File\]::(WriteAll\w*|AppendAll\w*|AppendText|Create\w*|Delete|Copy|Move|Replace|OpenWrite)\(\s*(['"])([^'"$]+)\2(?:\s*,\s*(['"])([^'"$]+)\4)?/i;
+
+/** `-WhatIf`: PowerShell only says what it would do. */
+const WHATIF = /^-whatif(:\$?true)?$/i;
+
+/** Whether a program word names a file with an extension (`sc.exe`), so it is never a PowerShell alias. */
+function hasExtension(word) {
+  return /\.\w+$/.test(path.basename(word.text.replace(/\\/g, "/")));
+}
 
 /** A program's plain name: lower case, no folder, no `.exe` or `.cmd`. */
 function programName(word) {
@@ -146,14 +160,37 @@ function targetDirectory(args) {
   return null;
 }
 
-/** Whether a short option cluster (`-pi`, `-i.bak`, `-ni`) or `--in-place` asks sed or perl to edit in place. */
-function inPlace(args) {
-  return args.some((word) => word.text === "--in-place" || word.text.startsWith("--in-place=") || /^-[a-zA-Z]*i/.test(word.text));
+/** Option letters after which the rest of a cluster is their value (`perl -Mstrict`, `-Ilib`; `sed -es/i/x/`). */
+const ATTACHED = { perl: "IMmeElCFdDx0", sed: "efl" };
+
+/**
+ * Whether a short option cluster (`-pi`, `-i.bak`, `-ni`) or `--in-place` asks sed or perl to edit in place. A letter
+ * that takes a value ends the cluster, so the `i` in `perl -Mstrict` or `-Ilib` is a value, never in-place.
+ */
+function inPlace(name, args) {
+  return args.some((word) => {
+    if (word.text === "--in-place" || word.text.startsWith("--in-place=")) {
+      return true;
+    }
+    if (!/^-[A-Za-z0-9]/.test(word.text)) {
+      return false;
+    }
+    for (const letter of word.text.slice(1)) {
+      if (letter === "i") {
+        return true;
+      }
+      if (ATTACHED[name].includes(letter)) {
+        return false;
+      }
+    }
+    return false;
+  });
 }
 
 /**
  * What one Bash (or PowerShell native) program writes: `{ files, commit, cd }`. `files` are words naming the files,
- * `commit` is `{ all }` for a `git commit` (`-a` also takes the changed tracked files), `cd` the folder a `cd` moves to.
+ * `commit` is `{ all }` for a `git commit` (`-a` also takes the changed tracked files), `cd` the folder a `cd` moves to,
+ * `stage` is `{ untracked }` for a `git add -A`, `.` or `-u` (whose files a later commit in the line carries).
  * `native` limits it to programs PowerShell runs as programs too (git and the package managers).
  */
 function programWrites(name, args, native) {
@@ -161,10 +198,11 @@ function programWrites(name, args, native) {
   let commit = null;
   let cd;
   let gitCwd;
+  let stage = null;
   if (!native && Object.hasOwn(VALUE_OPTIONS, name)) {
     const valueOptions = VALUE_OPTIONS[name];
     if (name === "sed" || name === "perl") {
-      if (inPlace(args)) {
+      if (inPlace(name, args)) {
         const scripted = args.some((word) => valueOptions.includes(word.text) && word.text !== "-I" && word.text !== "-M" && word.text !== "-m");
         files.push(...operands(args, valueOptions).slice(scripted ? 0 : 1));
       }
@@ -182,6 +220,9 @@ function programWrites(name, args, native) {
     files.push(...args.filter((word) => word.text.startsWith("of=")).map((word) => ({ ...word, text: word.text.slice(3) })));
   } else if (!native && (name === "cd" || name === "pushd")) {
     cd = args.length === 0 ? { text: "~", dynamic: false, quoted: false } : args[0].text === "-" ? null : args[0];
+  } else if (!native && name === "popd") {
+    // Back to a folder the reader did not keep: later relative paths are unknown.
+    cd = null;
   } else if (name === "git") {
     let i = 0;
     while (i < args.length && args[i].text.startsWith("-")) {
@@ -192,9 +233,19 @@ function programWrites(name, args, native) {
     }
     const sub = args[i]?.text;
     const rest = args.slice(i + 1);
-    if (sub === "commit") {
-      commit = { all: rest.some((word) => word.text === "--all" || /^-[a-zA-Z]*a/.test(word.text)) };
-    } else if (sub === "rm" || sub === "mv" || sub === "restore") {
+    if (sub === "commit" && !rest.some((word) => ["--dry-run", "-h", "--help"].includes(word.text))) {
+      commit = { all: rest.some((word) => word.text === "--all" || /^-[a-zA-Z]*a/.test(word.text)), untracked: false };
+    } else if (sub === "add") {
+      // Named files are written to the index; `git add -A`, `.` or `-u` stage what git lists, so a commit later in the
+      // same command line (nothing staged yet when the hook runs) asks about the changed files instead.
+      const named = operands(rest, ["--pathspec-from-file", "--chmod"]);
+      const whole = rest.some((word) => ["-A", "--all", "-u", "--update"].includes(word.text)) || named.some((word) => word.text === "." || word.text === ":/");
+      files.push(...named.filter((word) => word.text !== "." && word.text !== ":/"));
+      if (whole) {
+        stage = { untracked: !rest.some((word) => word.text === "-u" || word.text === "--update") };
+      }
+    } else if ((sub === "rm" && !rest.some((word) => word.text === "--cached")) || sub === "mv" || (sub === "restore" && (!rest.some((word) => word.text === "--staged" || word.text === "-S") || rest.some((word) => word.text === "--worktree" || word.text === "-W")))) {
+      // `git rm --cached` and `git restore --staged` change only the index, never a file.
       files.push(...operands(rest, ["-s", "--source", "--pathspec-from-file"]));
     } else if (sub === "checkout" && rest.some((word) => word.text === "--")) {
       files.push(...rest.slice(rest.findIndex((word) => word.text === "--") + 1));
@@ -203,11 +254,13 @@ function programWrites(name, args, native) {
     const { file, add } = MANIFESTS[name];
     const given = operands(args);
     const sub = given[0]?.text;
-    if (sub !== undefined && add.includes(sub) && (!NEEDS_NAMES.has(sub) || given.length > 1)) {
+    // A global install (`npm i -g pnpm`) or `--no-save` leaves the project's manifest alone.
+    const elsewhere = args.some((word) => ["-g", "--global", "--location=global", "--no-save"].includes(word.text));
+    if (sub !== undefined && !elsewhere && add.includes(sub) && (!NEEDS_NAMES.has(sub) || given.length > 1)) {
       files.push({ text: file, dynamic: false, quoted: false });
     }
   }
-  return { files, commit, cd, gitCwd };
+  return { files, commit, cd, gitCwd, stage };
 }
 
 /** The value words of a PowerShell cmdlet's parameters, by lower-case name, and its positional words. */
@@ -230,32 +283,53 @@ function psArguments(args) {
       positional.push(args[i]);
     }
   }
-  /** Comma lists (`Remove-Item a,b`) are several paths. */
+  /** Comma lists (`Remove-Item a,b`) are several paths; positions count the unsplit words (`Copy-Item a, b out`). */
   const split = (words) => words.flatMap((word) => word.text.split(",").filter((part) => part !== "").map((part) => ({ ...word, text: part })));
-  return { named, positional: split(positional), split };
+  // `Copy-Item a, b out`: a word ending in a comma continues the list in the next word.
+  const joined = [];
+  for (const word of positional) {
+    const last = joined.at(-1);
+    if (last !== undefined && (last.text.endsWith(",") || word.text.startsWith(","))) {
+      joined[joined.length - 1] = { ...last, text: `${last.text}${word.text}`, dynamic: last.dynamic || word.dynamic };
+    } else {
+      joined.push(word);
+    }
+  }
+  return { named, positional: joined, split };
 }
 
-/** What one PowerShell cmdlet writes, as programWrites returns it; null when it is not a cmdlet this reads. */
-function cmdletWrites(name, args) {
-  const cmdlet = PS_ALIASES[name] ?? name;
+/**
+ * What one PowerShell cmdlet writes, as programWrites returns it; null when it is not a cmdlet this reads. Aliases
+ * count only for a bare word (`del`, not `del.exe`).
+ */
+function cmdletWrites(name, args, bare) {
+  const cmdlet = (bare ? PS_ALIASES[name] : undefined) ?? name;
+  if (cmdlet === "popd" || cmdlet === "pop-location") {
+    return { files: [], commit: null, cd: null };
+  }
   if (cmdlet !== "set-location" && !PS_WRITERS.has(cmdlet)) {
     return null;
   }
   const { named, positional, split } = psArguments(args);
+  if (args.some((word) => WHATIF.test(word.text))) {
+    return { files: [], commit: null };
+  }
   const paths = split(named.path ?? named.literalpath ?? named.filepath ?? []);
-  const first = paths.length > 0 ? paths : positional.slice(0, 1);
+  const first = paths.length > 0 ? paths : split(positional.slice(0, 1));
   if (cmdlet === "set-location") {
-    return { files: [], commit: null, cd: first[0] ?? { text: "~", dynamic: false, quoted: false } };
+    // `cd -` and `cd +` walk PowerShell's location history, which the reader does not keep.
+    const to = first[0];
+    return { files: [], commit: null, cd: to === undefined ? { text: "~", dynamic: false, quoted: false } : to.text === "-" || to.text === "+" ? null : to };
   }
   if (cmdlet === "copy-item" || cmdlet === "move-item") {
-    const destination = named.destination ?? positional.slice(paths.length > 0 ? 0 : 1, paths.length > 0 ? 1 : 2);
+    const destination = named.destination ?? split(positional.slice(paths.length > 0 ? 0 : 1, paths.length > 0 ? 1 : 2));
     return { files: [...destination, ...(cmdlet === "move-item" ? first : [])], commit: null };
   }
   if ((cmdlet === "new-item" || cmdlet === "mkdir") && named.name !== undefined) {
     const folder = first[0] ?? { text: ".", dynamic: false, quoted: false };
     return { files: [{ ...named.name[0], text: `${folder.text}/${named.name[0].text}`, dynamic: folder.dynamic || named.name[0].dynamic }], commit: null };
   }
-  return { files: cmdlet === "remove-item" && paths.length === 0 ? positional : first, commit: null };
+  return { files: first, commit: null };
 }
 
 /**
@@ -270,6 +344,8 @@ export function shellWrites(command, { shell, cwd, home = os.homedir(), platform
   const commits = [];
   /** @type {string | null} */
   let at = cwd;
+  /** @type {{ untracked: boolean } | null} a `git add -A`, `.` or `-u` seen so far in the line */
+  let staging = null;
   /** An absolute path for a word, or null when it cannot be known. */
   const resolve = (word, from = at) => {
     if (word === null || word === undefined || word.dynamic || word.text === "" || NOWHERE.test(word.text)) {
@@ -277,14 +353,33 @@ export function shellWrites(command, { shell, cwd, home = os.homedir(), platform
     }
     const given = word.text === "~" || word.text.startsWith("~/") || word.text.startsWith("~\\") ? path.join(home, word.text.slice(1)) : word.text;
     // Git Bash on Windows spells C:\x as /c/x.
-    const text = platform === "win32" && shell === "bash" ? given.replace(/^\/([A-Za-z])(?=\/|$)/, "$1:") : given;
+    const text = platform === "win32" && shell === "bash" ? given.replace(/^\/([A-Za-z])(?=\/|$)/, "$1:/") : given;
     if (path.isAbsolute(text) || /^[A-Za-z]:[\\/]/.test(text)) {
       return path.resolve(text);
     }
     return from === null ? null : path.resolve(from, text);
   };
   const commands = shell === "powershell" ? powershellCommands(command) : bashCommands(command);
-  for (const { words, redirects } of commands) {
+  /** Where each open subshell started, so a `cd` inside `( ... )` ends with it. */
+  const opened = [];
+  for (const { words, redirects, group } of commands) {
+    if (group === "open") {
+      opened.push(at);
+      continue;
+    }
+    if (group === "close") {
+      at = opened.length > 0 ? opened.pop() : at;
+      continue;
+    }
+    if (shell === "powershell") {
+      for (const word of words) {
+        const call = word.quoted ? null : DOTNET.exec(word.text);
+        if (call !== null) {
+          const second = /^(copy|move|replace)$/i.test(call[1]);
+          files.push(resolve({ text: second ? (call[5] ?? "") : call[3], dynamic: false, quoted: true }));
+        }
+      }
+    }
     for (const { op, target } of redirects) {
       if (WRITE_OPS.has(op) && !(op.endsWith("&") && /^(\d+|-)$/.test(target.text))) {
         files.push(resolve(target));
@@ -306,38 +401,42 @@ export function shellWrites(command, { shell, cwd, home = os.homedir(), platform
     }
     const name = programName(program);
     const args = words.slice(start + 1);
-    const found = (shell === "powershell" ? cmdletWrites(name, args) : null) ?? programWrites(name, args, shell === "powershell");
+    const found = (shell === "powershell" ? cmdletWrites(name, args, !hasExtension(program)) : null) ?? programWrites(name, args, shell === "powershell");
     files.push(...found.files.map((word) => resolve(word)));
+    if (found.stage !== null && found.stage !== undefined) {
+      staging = { untracked: staging?.untracked === true || found.stage.untracked };
+    }
     if (found.commit !== null) {
       const where = found.gitCwd === undefined ? at : resolve(found.gitCwd);
       if (where !== null) {
-        commits.push({ cwd: where, all: found.commit.all });
+        // A `git add -A` earlier in the line stages files the hook cannot see staged yet: ask git for them as well.
+        commits.push({ cwd: where, all: found.commit.all || staging !== null, untracked: staging?.untracked === true });
       }
     }
     if (found.cd !== undefined) {
       at = resolve(found.cd);
     }
   }
-  for (const match of String(command).matchAll(DOTNET)) {
-    if (shell === "powershell") {
-      files.push(resolve({ text: match[2], dynamic: false, quoted: true }));
-    }
-  }
   return { files: [...new Set(files.filter((file) => file !== null))], commits };
 }
 
 /**
- * The paths a `git commit` about to run would carry: the staged ones, plus the changed tracked ones for `-a`. [] for a
- * merge commit (git-check.mjs `changedPaths`) or when git fails or runs past `timeoutMs`, so the gate fails open.
- * @param {{ cwd: string, all: boolean }} commit
+ * The paths a `git commit` about to run would carry: the staged ones, plus the changed tracked ones for `-a` (or after
+ * a `git add -A` in the same line), plus the untracked ones `git add -A` or `git add .` would stage. [] for a merge
+ * commit (git-check.mjs `changedPaths`) or when git fails or runs past `timeoutMs`, so the gate fails open.
+ * @param {{ cwd: string, all: boolean, untracked?: boolean }} commit
  * @param {number} timeoutMs
  * @returns {Promise<string[]>}
  */
 export async function commitPaths(commit, timeoutMs) {
   const git = (args) => runGit(args, { cwd: commit.cwd, timeoutMs });
   try {
-    const [staged, changed] = await Promise.all([changedPaths("pre-commit", { git }), commit.all ? git(["diff", "--name-only", "--no-renames", "-z"]).then(pathList) : null]);
-    return staged === null ? [] : [...new Set([...staged.paths, ...(changed?.paths ?? [])])];
+    const [staged, changed, added] = await Promise.all([
+      changedPaths("pre-commit", { git }),
+      commit.all ? git(["diff", "--name-only", "--no-renames", "-z"]).then(pathList) : null,
+      commit.untracked === true ? git(["ls-files", "--others", "--exclude-standard", "-z"]).then(pathList) : null,
+    ]);
+    return staged === null ? [] : [...new Set([...staged.paths, ...(changed?.paths ?? []), ...(added?.paths ?? [])])];
   } catch {
     return [];
   }
@@ -359,13 +458,18 @@ export function shellPaths(input, root, folder) {
   }
   const cwd = typeof input.cwd === "string" && input.cwd !== "" ? input.cwd : folder;
   const { files, commits } = shellWrites(command, { shell, cwd });
-  const paths = [];
-  for (const file of files) {
+  // realPath touches the disk, so a command naming thousands of files stops at MAX_PATHS inside the repository, and
+  // at MAX_LOOKED files in all, well inside the hook's budget.
+  const paths = new Set();
+  for (const file of files.slice(0, MAX_LOOKED)) {
     const relative = relativeTo(realPath(file), root);
-    if (relative !== null && relative !== "" && relative.length <= MAX_PATH_CHARS && !paths.includes(relative)) {
-      paths.push(relative);
+    if (relative !== null && relative !== "" && relative.length <= MAX_PATH_CHARS) {
+      paths.add(relative);
+    }
+    if (paths.size === MAX_PATHS) {
+      break;
     }
   }
   const inRepo = commits.filter((commit) => repoRoot(commit.cwd) === root);
-  return paths.length === 0 && inRepo.length === 0 ? null : { paths: paths.slice(0, MAX_PATHS), commits: inRepo };
+  return paths.size === 0 && inRepo.length === 0 ? null : { paths: [...paths], commits: inRepo };
 }

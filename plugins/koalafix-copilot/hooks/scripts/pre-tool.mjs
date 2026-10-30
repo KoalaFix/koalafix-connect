@@ -57,13 +57,14 @@ if (mode !== "off") {
     const { found, target } = located;
     // Leases name paths from the repository's top level, through any junction or symlink to it.
     const root = repoRoot(found.root);
-    const paths = shellOf(input?.tool_name) === null ? editPaths(realInput(input, found.root), root) : await commandPaths(input, root, found.root, deadlineAt);
-    if (paths === null) {
-      return;
-    }
     const sessionId = sessionIdOf(input);
     const key = sessionId === null ? null : sessionKey(found.root, sessionId);
+    // A --user install in a personal folder asks nothing, so it reads no command and starts no git either.
     if (found.user === true && (key === null || readState(key, env)?.autoLease !== true)) {
+      return;
+    }
+    const paths = shellOf(input?.tool_name) === null ? editPaths(realInput(input, found.root), root) : await commandPaths(input, root, found.root, deadlineAt);
+    if (paths === null) {
       return;
     }
     const state = key === null ? emptyGate() : readGate(key, env);
