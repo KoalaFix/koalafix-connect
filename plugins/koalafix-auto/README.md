@@ -29,8 +29,9 @@ with the hooks, it happens on every session:
   after the project, you are asked which one once, and your pick is remembered for that folder on your machine. Also
   what is open for you (a line in the client's hook log).
 - **Before an edit (Claude Code):** in a folder where the prompt hook started your work-in-progress lease (the
-  team's folders, above), before the session's first edit of a file (Edit, Write, MultiEdit, NotebookEdit) one read
-  asks your KoalaFix server whether one of your own check-ins covers it and whether a teammate's covers it too, inside
+  team's folders, above), before the session's first edit of a file (Edit, Write, MultiEdit, NotebookEdit, or a Bash
+  or PowerShell command that writes one: a redirection, `sed -i`, `cp`, `mv`, `rm`, a `git commit`'s staged files, a
+  package added; reads such as `ls` or `git status` send nothing) one read asks your KoalaFix server whether one of your own check-ins covers it and whether a teammate's covers it too, inside
   1 second. When a teammate is on it, the agent gets a note naming who, what and since when, once per check-in. With
   no check-in of your own, it gets a note once a session to check in with the `work` tool. It never stops an edit
   unless you set `KALIBRATE_GATE=block` (then it denies an unchecked edit, as a `koalafix init` project does, in every

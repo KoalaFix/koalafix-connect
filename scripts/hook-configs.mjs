@@ -28,7 +28,7 @@ const HOOKS = {
   subagentStart: { script: "subagent-start", timeout: 5 },
   // Claude Code only for now (KOA2-390 brings the other clients): the first-edit gate, ADR-0042 in kalibrate. Same
   // matcher and timeout as `koalafix init`'s (settings.ts); --user makes it warn, never deny, unless KALIBRATE_GATE says.
-  preTool: { script: "pre-tool", timeout: 5, matcher: "Edit|Write|MultiEdit|NotebookEdit" },
+  preTool: { script: "pre-tool", timeout: 5, matcher: "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell" },
 };
 
 const SCRIPTS = "hooks/scripts";
