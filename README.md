@@ -144,7 +144,7 @@ Codex, Cursor and Gemini CLI sign their KoalaFix tools in on their own, as above
   ownership, handoffs): `remember` it with kind `decision` and lane `team`, in your own words, never quoting the user (no `user_words`).
   Confirmed a fact still holds: `verify`.
 - When the task is finished: call `work` with action `done`.
-- Ask the user's yes only to `share`, or to `settle` a dispute. Leave other open items alone: the judge's suggestions, leases and notices close by themselves.
+- `share` and `settle` only with the user's yes, and leave open items you were not asked about alone: most close by themselves.
 
 ## Session hooks
 

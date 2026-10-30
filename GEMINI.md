@@ -12,7 +12,7 @@ This project uses KoalaFix, the team's shared memory, through the `koalafix` MCP
   `decision`, in your own words: never quote the user (no `user_words`), and leave out anything personal or secret.
   Confirmed a fact still holds: `verify`.
 - When the task is finished: call `work` with action `done`.
-- Ask the user's yes only to `share`, or to `settle` a dispute. Leave other open items alone: the judge's suggestions, leases and notices close by themselves.
+- `share` and `settle` only with the user's yes, and leave open items you were not asked about alone: most close by themselves.
 
 When KoalaFix hooks are installed, a block marked "added by a hook" already holds a recall (and, when the hooks started one, a work
 lease) for this task: use it instead of calling `recall` and `work` again. Without hooks, follow every step yourself.

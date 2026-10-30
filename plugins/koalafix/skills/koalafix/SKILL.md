@@ -1,6 +1,6 @@
 ---
 name: koalafix
-description: The KoalaFix team memory routine. Use at the start of every task in a session where the koalafix MCP server is connected, whenever you learn a durable fact or confirm one still holds, and when a task is finished. Covers recall before acting, work start and done, open items, remember and verify, and when share or settling a dispute needs the user's yes.
+description: The KoalaFix team memory routine. Use at the start of every task in a session where the koalafix MCP server is connected, whenever you learn a durable fact or confirm one still holds, and when a task is finished. Covers recall before acting, work start and done, open items, remember and verify, and when share and settle need the user's yes.
 ---
 
 ## KoalaFix (team memory)
@@ -25,7 +25,7 @@ This project uses KoalaFix, the team's shared memory, through the `koalafix` MCP
   anything personal or secret.
   Confirmed a fact still holds: `verify`.
 - When the task is finished: call `work` with action `done`.
-- Ask the user's yes only to `share`, or to `settle` a dispute. Leave other open items alone: the judge's suggestions, leases and notices close by themselves.
+- `share` and `settle` only with the user's yes, and leave open items you were not asked about alone: most close by themselves.
 
 When KoalaFix hooks are installed, a block marked "added by a hook" already holds a recall (and, when the hooks started one, a work
 lease) for this task: use it instead of calling `recall` and `work` again. Without hooks, follow every step yourself.
