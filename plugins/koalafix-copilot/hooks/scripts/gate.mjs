@@ -8,6 +8,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { reportedRepo } from "./provenance.mjs";
 import { kalibrateHome } from "./spool.mjs";
 
 /** The gate's wall-clock budget in ms: one read, so short; KALIBRATE_HOOK_BUDGET_MS overrides it (connect.mjs budgetFrom). */
@@ -154,17 +155,21 @@ export function allInScope(paths, scopes) {
 }
 
 /**
- * `/api/v1/gate?path=..&path=..[&space=..][&tool=..][&blocked_at=..]`, URL-encoded, at most 20 paths.
+ * `/api/v1/gate?path=..&path=..[&space=..][&repo=..][&tool=..][&blocked_at=..]`, URL-encoded, at most 20 paths. `repo` is
+ * the repository the paths are relative to, as `kalibrate/repo` reports it (ADR-0033, ADR-0045); omitted when unknown.
  * @param {readonly string[]} paths
- * @param {{ space?: string | null, tool?: string | null, blockedAt?: string | null }} [options]
+ * @param {{ space?: string | null, repo?: string | null, tool?: string | null, blockedAt?: string | null }} [options]
  */
-export function gateRoute(paths, { space = null, tool = null, blockedAt = null } = {}) {
+export function gateRoute(paths, { space = null, repo = null, tool = null, blockedAt = null } = {}) {
   const query = new URLSearchParams();
   for (const file of paths.slice(0, MAX_PATHS)) {
     query.append("path", file);
   }
   if (space) {
     query.set("space", space);
+  }
+  if (repo) {
+    query.set("repo", repo);
   }
   if (tool) {
     query.set("tool", tool);
@@ -173,6 +178,15 @@ export function gateRoute(paths, { space = null, tool = null, blockedAt = null }
     query.set("blocked_at", blockedAt);
   }
   return `/api/v1/gate?${query.toString().replace(/\+/g, "%20")}`;
+}
+
+/** The repository name to send with a gate check for `root` (provenance.mjs `reportedRepo`), null when unknown or on any error. */
+export function gateRepo(root) {
+  try {
+    return reportedRepo(root);
+  } catch {
+    return null;
+  }
 }
 
 /** A GateAnswer with the fields the hook uses, or null for anything else. */
