@@ -26,6 +26,7 @@ This project uses KoalaFix, the team's shared memory, through the `koalafix` MCP
   Confirmed a fact still holds: `verify`.
 - When the task is finished: call `work` with action `done`.
 - `share` and `settle` only with the user's yes, and leave open items you were not asked about alone: most close by themselves.
+- A link between two notes that is wrong (recall lists it under `related`): with the user's yes, drop it with `settle` on one note, `to` the other, action `dismiss`. There is no undo, and the pair is never linked again.
 
 When KoalaFix hooks are installed, a block marked "added by a hook" already holds a recall (and, when the hooks started one, a work
 lease) for this task: use it instead of calling `recall` and `work` again. Without hooks, follow every step yourself.
