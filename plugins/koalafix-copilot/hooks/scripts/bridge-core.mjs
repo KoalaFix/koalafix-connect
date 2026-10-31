@@ -14,6 +14,7 @@
 // follows a redirect and never appears in a message: a refused credential comes back as a JSON-RPC error naming the
 // fix. stdout carries protocol only; problems go to stderr.
 
+import { userServer } from "./credentials.mjs";
 import { isRecord, messageOf, redact } from "./connect.mjs";
 import { findConfig, mcpEndpoint, readToken, serverUrlOf } from "./project.mjs";
 
@@ -38,6 +39,18 @@ export function resolveBridgeTarget(root, env = process.env) {
     throw new Error(`no credential for ${origin}: run koalafix login --url ${origin}, or koalafix init again in this folder`);
   }
   return { url, token };
+}
+
+/**
+ * The person's own server and token (`koalafix connect` at user scope, ADR-0054): the default server in
+ * credentials.json and the token saved for exactly that origin. No project file is read.
+ */
+export function resolveUserBridgeTarget(env = process.env) {
+  const server = userServer(env);
+  if (server === null) {
+    throw new Error("no KoalaFix credential on this machine: run the connect line from the dashboard again, or koalafix login");
+  }
+  return { url: mcpEndpoint(server.serverUrl), token: server.token };
 }
 
 /** Every JSON-RPC message in a Streamable HTTP response body: one JSON document (or a batch), or an event stream. */

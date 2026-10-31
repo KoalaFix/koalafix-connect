@@ -18,6 +18,7 @@ import { appendSpool } from "./spool.mjs";
 import { ENDED_OUTCOME, readState, removeState, sessionIdOf, sessionKey } from "./wip.mjs";
 import { endPassDue, startEndPass } from "./capture-end.mjs";
 import { forgetModel, provenanceMeta } from "./provenance.mjs";
+import { removeGate } from "./gate.mjs";
 
 const env = process.env;
 const args = parseHookArgs(process.argv.slice(2));
@@ -37,6 +38,8 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.sessionEnd), async (
   const { found, target } = located;
   const project = found.root;
   const key = sessionKey(project, sessionId);
+  // The first-edit gate's session cache is only good for this session.
+  removeGate(key, env);
   const state = readState(key, env);
   // Claude Code only: the decision capture's last pass over turns no capture covered (capture-end.mjs).
   const cwd = env.CLAUDE_PROJECT_DIR ?? (typeof input.cwd === "string" ? input.cwd : project);

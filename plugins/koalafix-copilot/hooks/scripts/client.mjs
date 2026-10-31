@@ -13,7 +13,7 @@ import { NoCredentialError, userServer } from "./credentials.mjs";
 import { findConfig, hasProjectInstall, resolveTarget, trustedRoot, userFound } from "./project.mjs";
 
 /** The clients a hook can speak for. `claude-code` is the default. */
-export const CLIENTS = ["claude-code", "codex", "cursor", "gemini-cli", "opencode"];
+export const CLIENTS = ["claude-code", "codex", "cursor", "gemini-cli", "opencode", "copilot"];
 
 /**
  * Clients whose hooks must answer with one JSON object on stdout whenever they exit 0: Cursor (its stop hook),
@@ -29,6 +29,7 @@ const CLIENT_NAMES = {
   cursor: "kalibrate-cursor-hook",
   "gemini-cli": "kalibrate-gemini-cli-hook",
   opencode: "kalibrate-opencode-hook",
+  copilot: "kalibrate-copilot-hook",
 };
 
 const HOOK_VERSION = "0.2.0";
@@ -190,7 +191,7 @@ function locate(args, env, input) {
  * @param {unknown} dir
  * @param {string} platform
  */
-function folderPath(dir, platform) {
+export function folderPath(dir, platform = process.platform) {
   if (typeof dir !== "string" || dir === "") {
     return null;
   }
@@ -269,13 +270,14 @@ export function promptOutput(client, context) {
 /**
  * What the Stop hook prints to keep the turn going with a reason: Claude Code and Codex read `decision: "block"`,
  * Gemini CLI's AfterAgent too (`block` is its alias of `deny`: the reason goes back to the model as a new prompt),
- * Cursor's stop hook auto-submits `followup_message`. Null when the client cannot be held or there is no reason.
+ * Cursor's stop hook auto-submits `followup_message`, and Copilot's `agentStop` reads `decision` and `reason` (copilot.mjs
+ * passes them on). Null when the client cannot be held or there is no reason.
  */
 export function stopBlockOutput(client, reason) {
   if (reason === null) {
     return null;
   }
-  if (client === "claude-code" || client === "codex" || client === "gemini-cli") {
+  if (client === "claude-code" || client === "codex" || client === "gemini-cli" || client === "copilot") {
     return `${JSON.stringify({ decision: "block", reason })}
 `;
   }
