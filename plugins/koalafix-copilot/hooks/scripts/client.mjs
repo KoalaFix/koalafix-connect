@@ -191,7 +191,7 @@ function locate(args, env, input) {
  * @param {unknown} dir
  * @param {string} platform
  */
-function folderPath(dir, platform) {
+export function folderPath(dir, platform = process.platform) {
   if (typeof dir !== "string" || dir === "") {
     return null;
   }

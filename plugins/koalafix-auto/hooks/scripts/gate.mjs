@@ -158,12 +158,14 @@ export function allInScope(paths, scopes) {
 }
 
 /**
- * `/api/v1/gate?path=..&path=..[&space=..][&repo=..][&tool=..][&blocked_at=..]`, URL-encoded, at most 20 paths. `repo` is
- * the repository the paths are relative to, as `kalibrate/repo` reports it (ADR-0033, ADR-0045); omitted when unknown.
+ * `/api/v1/gate?path=..&path=..[&space=..][&repo=..][&tool=..][&mode=..][&blocked_at=..]`, URL-encoded, at most 20 paths.
+ * `repo` is the repository the paths are relative to, as `kalibrate/repo` reports it (ADR-0033, ADR-0045); omitted when
+ * unknown. `mode` (warn or block) is for the server's log only, so a warn-mode block counts apart from one that stopped
+ * an edit (KOA2-560).
  * @param {readonly string[]} paths
- * @param {{ space?: string | null, repo?: string | null, tool?: string | null, blockedAt?: string | null }} [options]
+ * @param {{ space?: string | null, repo?: string | null, tool?: string | null, mode?: "warn" | "block" | null, blockedAt?: string | null }} [options]
  */
-export function gateRoute(paths, { space = null, repo = null, tool = null, blockedAt = null } = {}) {
+export function gateRoute(paths, { space = null, repo = null, tool = null, mode = null, blockedAt = null } = {}) {
   const query = new URLSearchParams();
   for (const file of paths.slice(0, MAX_PATHS)) {
     query.append("path", file);
@@ -176,6 +178,9 @@ export function gateRoute(paths, { space = null, repo = null, tool = null, block
   }
   if (tool) {
     query.set("tool", tool);
+  }
+  if (mode === "warn" || mode === "block") {
+    query.set("mode", mode);
   }
   if (blockedAt) {
     query.set("blocked_at", blockedAt);

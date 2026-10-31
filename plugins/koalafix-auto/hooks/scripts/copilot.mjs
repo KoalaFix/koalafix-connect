@@ -11,6 +11,8 @@
 //   - sessionStart: `additionalContext`, the brief (or the sign-in link and code on first use).
 //   - userPromptTransformed: `modifiedTransformedPrompt`, the content the model receives with the recall block after
 //     it. Copilot drops the output of a command `userPromptSubmitted` hook, so this event is the per-prompt route.
+//   - preToolUse: `permissionDecision: "deny"` and `permissionDecisionReason`, the first-edit gate's block (KOA2-559);
+//     pre-tool.mjs prints that shape itself as `--client copilot`, and this passes on nothing else.
 //   - agentStop: `decision: "block"` and `reason`, the fields Claude Code reads too.
 //   - sessionEnd: nothing (Copilot ignores the output); the script closes the lease.
 // `koalafix init` writes `--project <dir>` (the project's `.kalibrate/config.json`, as every project install); the
@@ -29,6 +31,7 @@ import { fileURLToPath } from "node:url";
 export const EVENTS = {
   sessionStart: { script: "session-start", ms: 9_500 },
   userPromptTransformed: { script: "prompt", ms: 4_500 },
+  preToolUse: { script: "pre-tool", ms: 4_500 },
   agentStop: { script: "stop", ms: 4_500 },
   sessionEnd: { script: "session-end", ms: 4_500 },
 };
@@ -70,13 +73,38 @@ export function scriptFlags(rest) {
   return null;
 }
 
+/** The tool argument fields the first-edit gate reads: a path or a command, never a file's new text. */
+const GATE_ARGS = ["path", "file_path", "command", "input", "patch"];
+
+/**
+ * A tool's arguments with only the fields the gate reads, as the object or JSON string they came as. A `create` carries
+ * the whole new file, which the gate never reads and which could hold up the script's read of its input.
+ */
+export function slimArgs(args) {
+  const parsed = typeof args === "string" ? safeParse(args) : args;
+  if (!isRecord(parsed)) {
+    return args;
+  }
+  const kept = Object.fromEntries(GATE_ARGS.filter((name) => typeof parsed[name] === "string").map((name) => [name, parsed[name]]));
+  return typeof args === "string" ? JSON.stringify(kept) : kept;
+}
+
+function safeParse(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 /** The fields of a Copilot payload the scripts read, under the names they read them by. */
 export function slimInput(input) {
   const slim = {};
   // `session_id` is the VS Code compatible format's name (PascalCase events); the scripts read either.
-  for (const name of ["sessionId", "session_id", "cwd", "prompt", "source", "reason", "stop_hook_active"]) {
+  // `toolName` and `toolArgs` (or `tool_name` and `tool_input`) are what the first-edit gate reads at preToolUse.
+  for (const name of ["sessionId", "session_id", "cwd", "prompt", "source", "reason", "stop_hook_active", "toolName", "toolArgs", "tool_name", "tool_input"]) {
     if (input[name] !== undefined) {
-      slim[name] = input[name];
+      slim[name] = name === "toolArgs" || name === "tool_input" ? slimArgs(input[name]) : input[name];
     }
   }
   return slim;
@@ -116,6 +144,16 @@ export function holdOf(printed) {
   }
 }
 
+/** A gate deny the script printed (`permissionDecision: "deny"` with a reason), or null. */
+export function denyOf(printed) {
+  try {
+    const parsed = JSON.parse(printed.trim());
+    return isRecord(parsed) && parsed.permissionDecision === "deny" && typeof parsed.permissionDecisionReason === "string" && parsed.permissionDecisionReason.trim() !== "" ? parsed.permissionDecisionReason : null;
+  } catch {
+    return null;
+  }
+}
+
 /** What this hook prints for `event`, given Copilot's input and what the script printed. */
 export function copilotOutput(event, input, printed) {
   if (event === "sessionStart") {
@@ -130,6 +168,11 @@ export function copilotOutput(event, input, printed) {
       return {};
     }
     return { modifiedTransformedPrompt: `${content}\n\n${context}` };
+  }
+  if (event === "preToolUse") {
+    // Only a deny passes on: never an allow, which would skip the person's own permission prompt.
+    const reason = denyOf(printed);
+    return reason === null ? {} : { permissionDecision: "deny", permissionDecisionReason: reason };
   }
   if (event === "agentStop") {
     const reason = holdOf(printed);
