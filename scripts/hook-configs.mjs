@@ -2,7 +2,7 @@
 // Copyright 2026 KoalaFix PTY LTD
 
 // The hook files for every client that lets a plugin or extension run hooks, written from one table so they stay in
-// step with each other and with `koalafix init`: the same four scripts, the same --user mode, the same timeouts
+// step with each other and with `koalafix init`: the same four scripts (and in Claude Code a fifth, for subagents), the same --user mode, the same timeouts
 // (Copilot reaches them through a small adapter, plugins/koalafix-copilot/hooks/copilot.mjs).
 //   node scripts/hook-configs.mjs          rewrites the files
 //   node scripts/hook-configs.mjs --check  exits 1 when a file differs from what this table writes
@@ -17,12 +17,14 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/** The four hooks: the script each runs and its timeout in seconds (the scripts keep their own, shorter budgets). */
+/** The hooks: the script each runs and its timeout in seconds (the scripts keep their own, shorter budgets). */
 const HOOKS = {
   sessionStart: { script: "session-start", timeout: 10 },
   prompt: { script: "prompt", timeout: 5 },
   stop: { script: "stop", timeout: 5 },
   sessionEnd: { script: "session-end", timeout: 5 },
+  // Claude Code only: no other client starts subagents a hook can speak to. It makes no network call.
+  subagentStart: { script: "subagent-start", timeout: 5 },
 };
 
 const SCRIPTS = "hooks/scripts";
@@ -34,12 +36,14 @@ function claudeCode() {
     return { type: "command", command: "node", args: [`\${CLAUDE_PLUGIN_ROOT}/${SCRIPTS}/${script}.mjs`, "--user"], timeout };
   };
   return {
-    description: "KoalaFix team memory, automatic: the brief at session start, recall on each prompt, and now and then your AI saves the decisions made to the team (never in a claude -p or SDK run). Does nothing in a project with its own koalafix init install. Needs Node.js 22 or later; without it the hooks do nothing.",
+    description: "KoalaFix team memory, automatic: the brief at session start, recall on each prompt, a reminder to recall for subagents that can, and now and then your AI saves the decisions made to the team (never in a claude -p or SDK run). Does nothing in a project with its own koalafix init install. Needs Node.js 22 or later; without it the hooks do nothing.",
     hooks: {
       SessionStart: [{ matcher: "startup|resume|compact", hooks: [hook("sessionStart")] }],
       UserPromptSubmit: [{ hooks: [hook("prompt")] }],
       Stop: [{ hooks: [hook("stop")] }],
       SessionEnd: [{ hooks: [hook("sessionEnd")] }],
+      // No matcher: the script itself tells only the agents that can call recall, including custom ones.
+      SubagentStart: [{ hooks: [hook("subagentStart")] }],
     },
   };
 }

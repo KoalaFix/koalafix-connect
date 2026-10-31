@@ -14,7 +14,7 @@
 import { budgetFrom, finish, messageOf, readApi, runWithBudget } from "./connect.mjs";
 import { readHookInput } from "./project.mjs";
 import { locateHook, parseHookArgs } from "./client.mjs";
-import { GATE_BUDGET_MS, alreadyWarned, allInScope, blockedAtFor, editPaths, gateBudget, gateMode, gateOutput, gateRoute, nextGate, readAnswer, readGate, realInput, repoRoot, writeGate } from "./gate.mjs";
+import { GATE_BUDGET_MS, alreadyWarned, allInScope, blockedAtFor, editPaths, gateBudget, gateMode, gateOutput, gateRepo, gateRoute, nextGate, readAnswer, readGate, realInput, repoRoot, writeGate } from "./gate.mjs";
 import { pickedSpace } from "./spaces.mjs";
 import { sessionIdOf, sessionKey } from "./wip.mjs";
 
@@ -48,7 +48,7 @@ if (mode !== "off") {
     if (allInScope(paths, state.scopes)) {
       return;
     }
-    const route = gateRoute(paths, { space: pickedSpace(found.root, env), tool: input.tool_name, blockedAt: blockedAtFor(state, paths) });
+    const route = gateRoute(paths, { space: pickedSpace(found.root, env), repo: gateRepo(found.root), tool: input.tool_name, blockedAt: blockedAtFor(state, paths) });
     const answer = readAnswer(await readApi(target, route, deadlineAt, { slowIsDown: false }));
     if (answer === null) {
       throw new Error("GET /api/v1/gate answered something that is not a gate answer");

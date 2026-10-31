@@ -1,5 +1,5 @@
 {
-  "description": "KoalaFix team memory, automatic: the brief at session start, recall on each prompt, and now and then your AI saves the decisions made to the team (never in a claude -p or SDK run). Does nothing in a project with its own koalafix init install. Needs Node.js 22 or later; without it the hooks do nothing.",
+  "description": "KoalaFix team memory, automatic: the brief at session start, recall on each prompt, a reminder to recall for subagents that can, and now and then your AI saves the decisions made to the team (never in a claude -p or SDK run). Does nothing in a project with its own koalafix init install. Needs Node.js 22 or later; without it the hooks do nothing.",
   "hooks": {
     "SessionStart": [
       {
@@ -55,6 +55,21 @@
             "command": "node",
             "args": [
               "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/session-end.mjs",
+              "--user"
+            ],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/subagent-start.mjs",
               "--user"
             ],
             "timeout": 5
