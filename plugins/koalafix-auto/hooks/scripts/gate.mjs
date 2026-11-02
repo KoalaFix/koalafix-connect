@@ -105,7 +105,7 @@ export function repoRoot(folder) {
  * The repo-relative, forward-slash path of `file` under `root`, or null when it is outside the root. A relative file
  * is taken as relative to the root. Drive letters compare case-insensitively (Windows paths are).
  */
-function relativeTo(file, root) {
+export function relativeTo(file, root) {
   const given = String(file).trim().replace(/\\/g, "/");
   const base = String(root).trim().replace(/\\/g, "/").replace(/\/+$/, "");
   const windows = DRIVE.test(given) || DRIVE.test(`${base}/`);
