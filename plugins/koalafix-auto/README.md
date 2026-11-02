@@ -28,6 +28,10 @@ with the hooks, it happens on every session:
   script's answer stays its own; `KALIBRATE_CAPTURE=always` or `off` changes that. In several spaces with none named
   after the project, you are asked which one once, and your pick is remembered for that folder on your machine. Also
   what is open for you (a line in the client's hook log).
+- **Subagents (Claude Code):** none of the hooks above run inside a subagent, so a subagent that can call recall
+  (`general-purpose`, `Explore`, `Plan`, or a custom agent given the KoalaFix tools) gets two lines at its start:
+  recall with its own task and read the verdict before acting, and leave saving to the session that started it.
+  Agents with a fixed set of other tools get nothing. No network call.
 - **Session end (Claude Code):** if the last turns were not covered, one short background
   `claude -p --resume <session> --fork-session --no-session-persistence` run saves their decisions: one AI call on
   your own sign-in, limited to the koalafix `remember` and `recall` tools, never saved as a session.
@@ -57,7 +61,8 @@ this repository as a team marketplace.
 
 ## What it runs and sends
 
-- Four Node.js scripts (Node 22 or later) in `hooks/scripts/`, the same ones `koalafix init` installs. Claude Code
+- Four Node.js scripts (Node 22 or later) in `hooks/scripts/`, the same ones `koalafix init` installs, and in Claude
+  Code a fifth for subagents that reads only local files. Claude Code
   starts them with no shell between; Codex on macOS and Linux goes through `hooks/scripts/run.sh`, which only finds
   Node and starts the script. Without Node the hooks do nothing for KoalaFix (a client may show a one-line hook
   error).

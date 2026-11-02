@@ -16,7 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { messageOf, readApi, redact, runWithBudget } from "./connect.mjs";
 import { locateHook, parseHookArgs } from "./client.mjs";
-import { gateRoute, readAnswer } from "./gate.mjs";
+import { gateRepo, gateRoute, readAnswer } from "./gate.mjs";
 import { GIT_LIST_MS, changedPaths, gitBudget, gitMode, runGit, uncoveredPaths, warning } from "./git-check.mjs";
 import { pickedSpace } from "./spaces.mjs";
 
@@ -93,11 +93,12 @@ async function listThenAsk() {
       }
       const { found, target } = located;
       const space = pickedSpace(found.root, env);
+      const repo = gateRepo(found.root);
       const tool = kind === "pre-commit" ? "git-commit" : "git-push";
       const result = await uncoveredPaths(
         paths,
         async (asked) => {
-          const answer = readAnswer(await readApi(target, gateRoute(asked, { space, tool }), deadlineAt, { slowIsDown: false }));
+          const answer = readAnswer(await readApi(target, gateRoute(asked, { space, repo, tool }), deadlineAt, { slowIsDown: false }));
           if (answer === null) {
             throw new Error("GET /api/v1/gate answered something that is not a gate answer");
           }
