@@ -346,18 +346,21 @@ export function shellWrites(command, { shell, cwd, home = os.homedir(), platform
   let at = cwd;
   /** @type {{ untracked: boolean } | null} a `git add -A`, `.` or `-u` seen so far in the line */
   let staging = null;
+  // A Windows command takes Windows path rules even when it is read on Linux (as the tests do on CI), so C:/x stays
+  // absolute; anything else keeps this process's own rules.
+  const paths = platform === "win32" ? path.win32 : path;
   /** An absolute path for a word, or null when it cannot be known. */
   const resolve = (word, from = at) => {
     if (word === null || word === undefined || word.dynamic || word.text === "" || NOWHERE.test(word.text)) {
       return null;
     }
-    const given = word.text === "~" || word.text.startsWith("~/") || word.text.startsWith("~\\") ? path.join(home, word.text.slice(1)) : word.text;
+    const given = word.text === "~" || word.text.startsWith("~/") || word.text.startsWith("~\\") ? paths.join(home, word.text.slice(1)) : word.text;
     // Git Bash on Windows spells C:\x as /c/x.
     const text = platform === "win32" && shell === "bash" ? given.replace(/^\/([A-Za-z])(?=\/|$)/, "$1:/") : given;
-    if (path.isAbsolute(text) || /^[A-Za-z]:[\\/]/.test(text)) {
-      return path.resolve(text);
+    if (paths.isAbsolute(text) || /^[A-Za-z]:[\\/]/.test(text)) {
+      return paths.resolve(text);
     }
-    return from === null ? null : path.resolve(from, text);
+    return from === null ? null : paths.resolve(from, text);
   };
   const commands = shell === "powershell" ? powershellCommands(command) : bashCommands(command);
   /** Where each open subshell started, so a `cd` inside `( ... )` ends with it. */

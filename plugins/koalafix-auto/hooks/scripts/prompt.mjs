@@ -35,6 +35,7 @@ import { autoLeaseSpace } from "./lease-space.mjs";
 import { pickedSpace } from "./spaces.mjs";
 import { provenanceMeta } from "./provenance.mjs";
 import { pathsMeta, sessionPaths } from "./paths.mjs";
+import { closeReplaced } from "./lease-close.mjs";
 
 /** How many results one recall asks for: enough for a first block, few enough to stay inside the budget. */
 const RECALL_LIMIT = 5;
@@ -162,21 +163,27 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.prompt), async (dead
   // the same idempotency key and gets the same lease back rather than leaving a second one open.
   const leaseBy = deadlineAt - LEASE_CUTOFF_MS;
   const leaseIf = (ok, n) => (ok === true ? settleBy(startLease(session, key, n, label, args.client, reported, paths), leaseBy, LATE) : null);
+  // Where a later session start's sweep finds this session's project and how recently it moved (lease-close.mjs).
+  const where = { root: found.root, server: target.url, transcript: typeof input.transcript_path === "string" ? input.transcript_path : null };
   if (state === null) {
     const allowed = project ? Promise.resolve(true) : leaseAllowed(target, found.root, leaseBy);
     const [memory, started, autoLease] = await Promise.all([recall, allowed.then((ok) => leaseIf(ok, 1)), allowed]);
     const work = started === LATE ? null : started;
     const block = firstBlock(memory, work, null, paths, projectName);
     context = block.text;
-    writeState(key, { lease: work?.lease ?? null, expiresAt: work?.expires_at ?? null, leases: started === LATE ? 0 : 1, shown: block.shown, nudged: false, autoLease, injected: context.length, spent: false }, env);
+    writeState(key, { lease: work?.lease ?? null, expiresAt: work?.expires_at ?? null, leases: started === LATE ? 0 : 1, shown: block.shown, nudged: false, autoLease, injected: context.length, spent: false, ...where }, env);
     return;
   }
   // A plugin install whose spaces could not be read on the first prompt reads them again, until it knows.
   const allowed = project || state.autoLease !== null ? Promise.resolve(project || state.autoLease) : leaseAllowed(target, found.root, leaseBy);
   const restart = allowed.then((ok) => (leaseLive(state) ? null : leaseIf(ok, state.leases + 1)));
-  const [memory, started, autoLease] = await Promise.all([recall, restart, allowed]);
+  // The lease past its end time was extended by every call since, so it is still open: closed beside the next start.
+  const replaced = leaseLive(state) ? false : allowed.then((ok) => ok === true && closeReplaced(session, found.root, target.url, key, state, reported, leaseBy, env));
+  // A failed recall still waits for the close (it never throws), so a close the server did not confirm reaches the spool.
+  const [memory, started, autoLease] = await Promise.all([recall, restart, allowed]).finally(() => replaced);
+  const closed = await replaced;
   const work = started === LATE ? null : started;
-  const known = { ...state, autoLease: project ? state.autoLease : autoLease };
+  const known = { ...state, ...where, ...(closed ? { lease: null, expiresAt: null } : {}), autoLease: project ? state.autoLease : autoLease };
   const next = work === null ? known : { ...known, lease: work.lease ?? null, expiresAt: work.expires_at ?? null, leases: state.leases + 1 };
   const restarted = work === null ? null : restartedLine(work);
   // The session's budget (KOA2-138): news fits in what is left of it after a restarted lease's line, collisions go out

@@ -19,6 +19,7 @@ import { ENDED_OUTCOME, readState, removeState, sessionIdOf, sessionKey } from "
 import { endPassDue, startEndPass } from "./capture-end.mjs";
 import { forgetModel, provenanceMeta } from "./provenance.mjs";
 import { removeGate } from "./gate.mjs";
+import { closeArgs } from "./lease-close.mjs";
 
 const env = process.env;
 const args = parseHookArgs(process.argv.slice(2));
@@ -53,9 +54,9 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.sessionEnd), async (
     await startPass();
     return "no lease";
   }
-  const pending = { action: "done", lease: state.lease, outcome: ENDED_OUTCOME, idempotency_key: `hook-wip-done:${key}:${state.leases}` };
+  const pending = closeArgs(key, state, ENDED_OUTCOME);
   removeState(key, env);
-  appendSpool({ source: "session-end", project, tool: "work", arguments: pending, reason: "queued before the close, in case the session exits first" }, env);
+  appendSpool({ source: "session-end", project, server: target.url, tool: "work", arguments: pending, reason: "queued before the close, in case the session exits first" }, env);
   // Once the close is durable: the close reports the session's repo and model too, then the kept model goes.
   const reported = provenanceMeta(project, input, key, env);
   forgetModel(key, env);

@@ -46,20 +46,54 @@ export function namesRecall(entry) {
   return match !== null && /koalafix/i.test(match[1]) && (match[2] === undefined || match[2] === "*" || match[2] === "recall");
 }
 
-/** A frontmatter list: `a, b` on one line, or `- a` lines under the key. Null when the key is absent. */
+/** Remove a YAML comment outside quotes, preserving quoted hash characters. */
+function withoutComment(text) {
+  let quote = "";
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    if (quote !== "") {
+      if (quote === '"' && char === "\\") {
+        i += 1;
+      } else if (char === quote) {
+        if (quote === "'" && text[i + 1] === "'") {
+          i += 1;
+        } else {
+          quote = "";
+        }
+      }
+    } else if ((char === '"' || char === "'") && (i === 0 || /[\s[,]/.test(text[i - 1]))) {
+      quote = char;
+    } else if (char === "#" && (i === 0 || /\s/.test(text[i - 1]))) {
+      return text.slice(0, i).trim();
+    }
+  }
+  if (quote !== "") {
+    throw new Error("unsupported agent frontmatter quoting");
+  }
+  return text.trim();
+}
+
+/** A frontmatter list: comma-separated or flow values, or indented/unindented YAML sequence entries. */
 function listOf(lines, key) {
-  const at = lines.findIndex((line) => new RegExp(`^${key}\\s*:`).test(line));
+  const at = lines.findIndex((line) => new RegExp(`^(?:${key}|"${key}"|'${key}')\\s*:`).test(line));
   if (at === -1) {
     return null;
   }
-  const inline = lines[at].slice(lines[at].indexOf(":") + 1).trim().replace(/^\[|\]$/g, "");
+  const value = withoutComment(lines[at].slice(lines[at].indexOf(":") + 1));
+  if (/^[|>&{]/.test(value) || (value.startsWith("[") && !value.endsWith("]"))) {
+    throw new Error("unsupported agent frontmatter list");
+  }
+  const inline = value.replace(/^\[|\]$/g, "");
   const items = inline === "" ? [] : inline.split(",");
   for (const line of lines.slice(at + 1)) {
-    const item = /^\s+-\s*(.*)$/.exec(line);
+    if (line.trim() === "" || line.trimStart().startsWith("#")) {
+      continue;
+    }
+    const item = /^\s*-\s+(.*)$/.exec(line);
     if (item === null) {
       break;
     }
-    items.push(item[1]);
+    items.push(withoutComment(item[1]));
   }
   return items.map((item) => item.trim().replace(/^["']|["']$/g, "")).filter((item) => item !== "");
 }
@@ -76,8 +110,13 @@ export function parseAgent(text) {
   }
   const lines = match[1].split(/\r?\n/);
   const nameLine = lines.find((line) => /^name\s*:/.test(line));
-  const name = nameLine === undefined ? null : nameLine.slice(nameLine.indexOf(":") + 1).trim().replace(/^["']|["']$/g, "");
-  return { name, tools: listOf(lines, "tools"), disallowed: listOf(lines, "disallowedTools") };
+  try {
+    const name = nameLine === undefined ? null : withoutComment(nameLine.slice(nameLine.indexOf(":") + 1)).replace(/^["']|["']$/g, "");
+    return { name, tools: listOf(lines, "tools"), disallowed: listOf(lines, "disallowedTools") };
+  } catch {
+    // Unsupported permission syntax must not imply inherited access to recall.
+    return null;
+  }
 }
 
 /** Whether an agent with this frontmatter can call recall. */
@@ -113,16 +152,33 @@ export function claudeConfigDir(env = process.env) {
   return typeof moved === "string" && moved !== "" ? moved : path.join(os.homedir(), ".claude");
 }
 
-/** The agents folders of the installed plugin `plugin` (installed_plugins.json, every install of it). */
-function pluginAgentDirs(configDir, plugin) {
+/** The agents folder of the applicable plugin install, with local/project settings before user settings. */
+function pluginAgentDirs(configDir, plugin, projectDir) {
   try {
     const installed = JSON.parse(fs.readFileSync(path.join(configDir, "plugins", "installed_plugins.json"), "utf8"));
     const plugins = isRecord(installed) && isRecord(installed.plugins) ? installed.plugins : {};
     return Object.entries(plugins)
       .filter(([id]) => id.split("@")[0] === plugin)
       .flatMap(([, installs]) => (Array.isArray(installs) ? installs : []))
-      .map((install) => (isRecord(install) && typeof install.installPath === "string" ? path.join(install.installPath, "agents") : null))
-      .filter((dir) => dir !== null);
+      .filter((install) => {
+        if (!isRecord(install) || typeof install.installPath !== "string") {
+          return false;
+        }
+        if (install.scope === "user" || (install.scope === undefined && install.projectPath === undefined)) {
+          return true;
+        }
+        if ((install.scope !== "project" && install.scope !== "local") || typeof install.projectPath !== "string" || projectDir === null) {
+          return false;
+        }
+        const relative = path.relative(install.projectPath, projectDir);
+        return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+      })
+      .toSorted((a, b) => {
+        const priority = { local: 2, project: 1, user: 0 };
+        return (priority[b.scope] ?? 0) - (priority[a.scope] ?? 0) || (b.projectPath?.length ?? 0) - (a.projectPath?.length ?? 0);
+      })
+      .slice(0, 1)
+      .map((install) => path.join(install.installPath, "agents"));
   } catch {
     return [];
   }
@@ -139,7 +195,7 @@ export function findAgent(agentType, projectDir, env = process.env) {
   const colon = agentType.indexOf(":");
   if (colon !== -1) {
     const name = agentType.slice(colon + 1);
-    for (const dir of pluginAgentDirs(configDir, agentType.slice(0, colon))) {
+    for (const dir of pluginAgentDirs(configDir, agentType.slice(0, colon), projectDir)) {
       const found = findIn(dir, name);
       if (found !== null) {
         return found;
