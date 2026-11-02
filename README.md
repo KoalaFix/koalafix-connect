@@ -145,6 +145,7 @@ Codex, Cursor and Gemini CLI sign their KoalaFix tools in on their own, as above
   Confirmed a fact still holds: `verify`.
 - When the task is finished: call `work` with action `done`.
 - `share` and `settle` only with the user's yes, and leave open items you were not asked about alone: most close by themselves.
+- A link between two notes that is wrong (recall lists it under `related`): with the user's yes, drop it with `settle` on one note, `to` the other, action `dismiss`. There is no undo, and the pair is never linked again.
 
 ## Session hooks
 

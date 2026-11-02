@@ -49,6 +49,7 @@ choose to authenticate.
   Confirmed a fact still holds: `verify`.
 - When the task is finished: call `work` with action `done`.
 - `share` and `settle` only with the user's yes, and leave open items you were not asked about alone: most close by themselves.
+- A link between two notes that is wrong (recall lists it under `related`): with the user's yes, drop it with `settle` on one note, `to` the other, action `dismiss`. There is no undo, and the pair is never linked again.
 
 Session hooks (the brief at session start, a recall on every prompt, the session's decisions saved to the team) are not part
 of this plugin. In Claude, install `koalafix-auto` instead (it carries this plugin's server and skill); in Codex and
