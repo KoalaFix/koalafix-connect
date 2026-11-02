@@ -98,7 +98,7 @@ async function listThenAsk() {
       const result = await uncoveredPaths(
         paths,
         async (asked) => {
-          const answer = readAnswer(await readApi(target, gateRoute(asked, { space, repo, tool }), deadlineAt, { slowIsDown: false }));
+          const answer = readAnswer(await readApi(target, gateRoute(asked, { space, repo, tool, mode }), deadlineAt, { slowIsDown: false }));
           if (answer === null) {
             throw new Error("GET /api/v1/gate answered something that is not a gate answer");
           }

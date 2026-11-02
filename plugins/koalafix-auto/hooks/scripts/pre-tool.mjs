@@ -2,7 +2,8 @@
 // Copyright 2026 KoalaFix PTY LTD and the Kalibrate contributors
 
 // The first-edit gate's hook (ADR-0042, KOA2-135): Claude Code `PreToolUse` on Edit, Write, MultiEdit and
-// NotebookEdit. Before the session's first edit of a path it asks `GET /api/v1/gate` whether the person has checked in
+// NotebookEdit, and with `--client` the other clients' pre-tool hooks (gate-clients.mjs reads each one's shape,
+// KOA2-559). Before the session's first edit of a path it asks `GET /api/v1/gate` whether the person has checked in
 // for it. An allow or warn is cached for the session as the covering lease's paths, so a later edit inside them asks
 // nothing; in block mode a block is not cached and denies the edit with the server's check-in instruction.
 // `KALIBRATE_GATE` is off, warn or block (default block; warn for a `--user` install, the plugin's or `koalafix
@@ -17,9 +18,10 @@
 
 import { budgetFrom, finish, messageOf, readApi, runWithBudget } from "./connect.mjs";
 import { readHookInput } from "./project.mjs";
-import { locateHook, parseHookArgs } from "./client.mjs";
-import { GATE_BUDGET_MS, MAX_PATHS, allInScope, alreadyShown, blockedAtFor, editPaths, emptyGate, gateBudget, gateMode, gateOutput, gateRepo, gateRoute, nextGate, readAnswer, readGate, realInput, repoRoot, writeGate } from "./gate.mjs";
-import { commitPaths, shellOf, shellPaths } from "./shell-writes.mjs";
+import { locateHook, parseHookArgs, quietOutput } from "./client.mjs";
+import { GATE_BUDGET_MS, MAX_PATHS, allInScope, alreadyShown, blockedAtFor, emptyGate, gateBudget, gateMode, gateRepo, gateRoute, nextGate, readAnswer, readGate, repoRoot, writeGate } from "./gate.mjs";
+import { editFilePaths, gateCall, gateOutputFor, shellInput } from "./gate-clients.mjs";
+import { commitPaths, shellPaths } from "./shell-writes.mjs";
 import { pickedSpace } from "./spaces.mjs";
 import { readState, sessionIdOf, sessionKey } from "./wip.mjs";
 
@@ -63,7 +65,11 @@ if (mode !== "off") {
     if (found.user === true && (key === null || readState(key, env)?.autoLease !== true)) {
       return;
     }
-    const paths = shellOf(input?.tool_name) === null ? editPaths(realInput(input, found.root), root) : await commandPaths(input, root, found.root, deadlineAt);
+    const call = gateCall(args.client, input);
+    if (call === null) {
+      return;
+    }
+    const paths = call.shell === null ? editFilePaths(call.files, root, found.root, input?.cwd ?? null) : await commandPaths(shellInput(call, input), root, found.root, deadlineAt);
     if (paths === null) {
       return;
     }
@@ -71,13 +77,13 @@ if (mode !== "off") {
     if (allInScope(paths, state.scopes)) {
       return;
     }
-    const route = gateRoute(paths, { space: pickedSpace(found.root, env), repo: gateRepo(found.root), tool: input.tool_name, blockedAt: blockedAtFor(state, paths) });
+    const route = gateRoute(paths, { space: pickedSpace(found.root, env), repo: gateRepo(found.root), tool: call.tool, mode, blockedAt: blockedAtFor(state, paths) });
     const answer = readAnswer(await readApi(target, route, deadlineAt, { slowIsDown: false }));
     if (answer === null) {
       throw new Error("GET /api/v1/gate answered something that is not a gate answer");
     }
     if (!alreadyShown(state, answer, mode)) {
-      stdout = gateOutput(answer, mode);
+      stdout = gateOutputFor(args.client, answer, mode);
     }
     // An answer that came after the budget ran out was never shown, so it must not mark anything shown.
     if (key !== null && Date.now() < deadlineAt) {
@@ -93,4 +99,5 @@ if (mode !== "off") {
     notice += `koalafix: gate skipped: ${messageOf(outcome.error)}\n`;
   }
 }
-finish({ stdout, stderr: notice });
+// Codex, Cursor and Gemini CLI read stdout as JSON whenever the hook exits 0, so nothing to say is `{}` for them.
+finish({ stdout: stdout === "" ? quietOutput(args.client) : stdout, stderr: notice });
