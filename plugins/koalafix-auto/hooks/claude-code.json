@@ -7,11 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/session-start.mjs",
-              "--user"
-            ],
+            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/run.sh\" session-start --user; node \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/session-start.mjs\" --user",
             "timeout": 10
           }
         ]
@@ -22,11 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/prompt.mjs",
-              "--user"
-            ],
+            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/run.sh\" prompt --user; node \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/prompt.mjs\" --user",
             "timeout": 5
           }
         ]
@@ -38,11 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/pre-tool.mjs",
-              "--user"
-            ],
+            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/run.sh\" pre-tool --user; node \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/pre-tool.mjs\" --user",
             "timeout": 5
           }
         ]
@@ -53,11 +41,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/stop.mjs",
-              "--user"
-            ],
+            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/run.sh\" stop --user; node \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/stop.mjs\" --user",
             "timeout": 5
           }
         ]
@@ -68,11 +52,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/session-end.mjs",
-              "--user"
-            ],
+            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/run.sh\" session-end --user; node \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/session-end.mjs\" --user",
             "timeout": 5
           }
         ]
@@ -83,11 +63,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/subagent-start.mjs",
-              "--user"
-            ],
+            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/run.sh\" subagent-start --user; node \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/subagent-start.mjs\" --user",
             "timeout": 5
           }
         ]

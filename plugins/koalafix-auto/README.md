@@ -93,6 +93,10 @@ this repository as a team marketplace.
   plugin's copy of the `koalafix` server. Claude Code runs it each time it connects that server. It reads no project
   file and prints an Authorization header with your credential only for exactly the server Claude Code is connecting
   to, over https; with none, it prints `{}` and Claude Code's own OAuth sign-in takes over.
+- Claude Code starts the hooks and that helper through `hooks/scripts/run.sh` wherever it has a POSIX shell (macOS,
+  Linux, Git Bash on Windows). run.sh finds Node from Homebrew, nvm, Volta, fnm, asdf or mise even when an app opened
+  from the Dock hands it macOS's short PATH; with no Node at all it does nothing and exits 0. In PowerShell (Windows
+  without Git Bash) and cmd the same line runs `node` straight.
 - They contain no token. The only address in them is the hosted server, where the first browser sign-in goes. They
   never print a token, except the helper, to Claude Code, as that header.
 - Team memory comes into the session as data inside a `<koalafix-memory-…>` block, under a line telling the agent
