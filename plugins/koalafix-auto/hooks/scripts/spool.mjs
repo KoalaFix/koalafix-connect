@@ -4,8 +4,10 @@
 // The local spool both hooks share. When the server cannot be reached, a hook appends a line describing the call it
 // tried to make to <KALIBRATE_HOME or ~/.kalibrate>/spool/<date>.jsonl, tagged with the project folder it came from.
 // The next session-start hook that reaches the server of that same project replays the lines that are worth
-// replaying (writes) through the real tools and drops the rest; another project's lines stay queued for it. A spool
-// line never holds a token: it records the project, the tool name and its arguments, nothing about the connection.
+// replaying (writes) through the real tools and drops the rest; another project's lines stay queued for it, unless the
+// line names the server (its MCP url) and that is the server this session start reached: a lease close a hook queued
+// in a folder nobody opens again still reaches the one server it was meant for (KOA2-531). A spool line never holds a
+// token: it records the project, the server's url, the tool name and its arguments.
 
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -53,8 +55,9 @@ export function sameProject(a, b) {
 
 /**
  * Appends one line to today's spool file and returns the file's path. `project` is the folder that holds the
- * project's `.kalibrate/`, so the call is only ever replayed against that project's server.
- * @param {{ source: string, project?: string, tool: string, arguments: Record<string, unknown>, reason?: string }} call
+ * project's `.kalibrate/`, so the call is only ever replayed against that project's server; `server`, when given, is
+ * that server's MCP url, which lets a session start in another project on the same server replay it.
+ * @param {{ source: string, project?: string, server?: string, tool: string, arguments: Record<string, unknown>, reason?: string }} call
  */
 export function appendSpool(call, env = process.env, now = new Date()) {
   const dir = spoolDir(env);
@@ -66,6 +69,7 @@ export function appendSpool(call, env = process.env, now = new Date()) {
     at: now.toISOString(),
     source: call.source,
     ...(typeof call.project === "string" ? { project: call.project } : {}),
+    ...(typeof call.server === "string" ? { server: call.server } : {}),
     tool: call.tool,
     arguments: call.arguments,
     replay: REPLAYABLE_TOOLS.has(call.tool),
@@ -120,10 +124,10 @@ function pendingFiles(dir) {
  * Replays the spool. `send(entry)` makes the call and throws if it fails; an error with `name === "ToolError"`
  * means the server answered with an error (a tool's refusal or a JSON-RPC error, counted against the entry),
  * anything else means the server is unreachable (replay stops and the rest stays queued). With `project` set, only
- * that project's lines are sent: another project's stay queued, and a replayable line with no project is dropped,
- * because no server can be shown to be its own.
+ * that project's lines are sent, and with `server` set also a line that names exactly that server: another project's
+ * stay queued, and a replayable line with no project is dropped, because no server can be shown to be its own.
  * @param {(entry: Record<string, unknown>) => Promise<unknown>} send
- * @param {{ env?: NodeJS.ProcessEnv, project?: string, maxEntries?: number, shouldStop?: () => boolean }} [options]
+ * @param {{ env?: NodeJS.ProcessEnv, project?: string, server?: string, maxEntries?: number, shouldStop?: () => boolean }} [options]
  */
 export async function drainSpool(send, options = {}) {
   const env = options.env ?? process.env;
@@ -158,7 +162,8 @@ export async function drainSpool(send, options = {}) {
         result.dropped++;
         continue;
       }
-      if (options.project !== undefined && !sameProject(entry.project, options.project)) {
+      const sameServer = typeof options.server === "string" && entry.server === options.server;
+      if (options.project !== undefined && !sameProject(entry.project, options.project) && !sameServer) {
         if (typeof entry.project === "string") {
           keep.push(line);
         } else {

@@ -225,6 +225,16 @@ export function grouped(files) {
 }
 
 /** Server text for a terminal: control characters (escape codes, line breaks) become spaces, so none can forge a line. */
+/** The teammate by display name, else their handle (KOA2-542). */
+function nameOf(work) {
+  for (const value of [work.who_name, work.who]) {
+    if (typeof value === "string" && value.trim() !== "") {
+      return value;
+    }
+  }
+  return "someone";
+}
+
 function plain(value) {
   return Array.from(String(value), (char) => {
     const code = char.charCodeAt(0);
@@ -248,7 +258,7 @@ export function warning(kind, result, blocking) {
     lines.push(blocking ? `koalafix: the ${act} was stopped (KALIBRATE_GIT_GATE=block). Check in, or run it again with KALIBRATE_GIT_GATE=warn.` : `koalafix: this is a warning; the ${act} went ahead.`);
   }
   for (const work of result.overlaps) {
-    lines.push(`koalafix: a teammate is on these paths too: ${plain(work.who ?? "someone")} on "${plain(work.what ?? "")}" [lease ${plain(work.lease)}].`);
+    lines.push(`koalafix: a teammate is on these paths too: ${plain(nameOf(work))} on "${plain(work.what ?? "")}" [lease ${plain(work.lease)}].`);
   }
   const unchecked = result.unchecked.length + (result.dropped ?? 0);
   if (unchecked > 0) {

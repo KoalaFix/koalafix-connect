@@ -28,6 +28,7 @@ import { drainSpool } from "./spool.mjs";
 import { keepModel, modelOf, reportedRepo } from "./provenance.mjs";
 import { sessionIdOf, sessionKey } from "./wip.mjs";
 import { installNotice } from "./install-notice.mjs";
+import { sweepQuiet } from "./lease-close.mjs";
 
 const env = process.env;
 const args = parseHookArgs(process.argv.slice(2));
@@ -76,6 +77,9 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.sessionStart), async
   }
   const { found, target } = located;
   plugin = found.user === true;
+  // Leases of sessions that went quiet without their session-end hook are closed through the spool, which the replay
+  // below sends for this project and this server (lease-close.mjs, KOA2-531). Local files only, before the network.
+  sweepQuiet(env);
   // Claude Code names the session's model here only: kept for the session's later hooks to report (KOA2-149).
   const sessionId = sessionIdOf(input);
   if (sessionId !== null) {
@@ -94,6 +98,7 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.sessionStart), async
   await drainSpool(async (entry) => callTool(session, entry.tool, entry.arguments, { [IDEMPOTENCY_META]: keyOf(entry) }), {
     env,
     project: found.root,
+    server: target.url,
     shouldStop: () => deadlineAt - Date.now() < 300,
   });
 });

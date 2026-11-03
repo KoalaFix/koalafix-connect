@@ -16,8 +16,9 @@
 //   any Cursor or Gemini CLI session, which give no sign), whose printed answer a held turn would replace. If the
 //   person's spaces cannot be read it holds nothing and tries next turn. When it has to ask which space, it asks once
 //   a session, and remembers the person's pick for the folder (spaces.mjs) from the session's transcript.
-// - Asks the server what is open for the person (`open`, the real tool with its real arguments) and prints one line
-//   on stderr. If the server cannot be reached it appends that call to the spool
+// - Asks the server what needs the person (`open` for disputes and handoffs, the real tool with its real arguments) and
+//   prints one line on stderr naming what this session has not named yet, so each item is told once a session and a
+//   turn with nothing new prints nothing (KOA2-545). If the server cannot be reached it appends that call to the spool
 //   (<KALIBRATE_HOME or ~/.kalibrate>/spool/<date>.jsonl, tagged with this project), and the next session-start hook
 //   in the project replays what is worth replaying.
 // Budget 2.5 s (the configured timeout is 5 s); KALIBRATE_HOOK_BUDGET_MS overrides it. Gemini CLI runs this script at
@@ -30,16 +31,22 @@
 import { BUDGETS, IDEMPOTENCY_META, ToolError, budgetFrom, callTool, connect, finish, messageOf, runWithBudget } from "./connect.mjs";
 import { readHookInput } from "./project.mjs";
 import { locateHook, parseHookArgs, quietOutput, stopBlockOutput } from "./client.mjs";
-import { summarizeOpen } from "./format.mjs";
+import { needsYouLine } from "./format.mjs";
 import { appendSpool } from "./spool.mjs";
-import { backstopReason, leaseKey, leaseLive, readState, sessionIdOf, sessionKey, writeState } from "./wip.mjs";
+import { backstopReason, leaseKey, leaseLive, readState, readTold, sessionIdOf, sessionKey, writeState, writeTold } from "./wip.mjs";
 import { projectLabel } from "./label.mjs";
 import { keepModel, keptModel, provenanceMeta, transcriptModel } from "./provenance.mjs";
 import { attended, captureDue, captureEvery, captureReason, capturing, fetchSpaces, holdable, isSpacesPage, memberSlugs, pickSpace, projectSlugs } from "./capture.mjs";
 import { pickFromTranscript, pickedSpace, rememberPick, transcriptSize } from "./spaces.mjs";
+import { closeReplaced } from "./lease-close.mjs";
 
-/** `OpenArgs` (contract tools-io.ts): the caller's own items, one page of ten. */
-const OPEN_ARGS = { for: "me", limit: 10 };
+/**
+ * `OpenArgs` (contract tools-io.ts): the caller's own items that need them (KOA2-545), the kinds the session brief
+ * lists (mcp-server brief.ts): a dispute and a rule review wait for a person and no clock closes them, and a handoff the
+ * clock returns to its sender unacked. The rest close harmlessly by the clock, or the agent closes them itself. A page
+ * of 50, so an item that arrives mid-session is not hidden behind ten already named.
+ */
+const OPEN_ARGS = { for: "me", kind: ["dispute", "rule_review", "handoff"], limit: 50 };
 
 const env = process.env;
 const args = parseHookArgs(process.argv.slice(2));
@@ -47,6 +54,8 @@ const gemini = args.client === "gemini-cli";
 let project = null;
 let afterAgent = false;
 const holds = [];
+/** The session's key, for what the Stop line has named this session (null at Gemini CLI's SessionEnd). */
+let toldKey = null;
 const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessionEnd : BUDGETS.stop), async (deadlineAt) => {
   const input = await readHookInput(process.stdin, 200);
   if (args.error !== null) {
@@ -97,6 +106,11 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
   const reported = session === null ? {} : provenanceMeta(found.root, input, key, env);
   // A plugin install restarts its lease only when the first prompt found it lands in this folder's space (KOA2-5).
   if (session !== null && state !== null && (found.user !== true || state.autoLease === true) && !leaseLive(state)) {
+    // The lease past its end time was extended by every call since, so it is still open: closed first (KOA2-531).
+    if (await closeReplaced(session, found.root, target.url, key, state, reported, deadlineAt - 1000, env)) {
+      state = { ...state, lease: null, expiresAt: null };
+      writeState(key, state, env);
+    }
     const n = state.leases + 1;
     const what = projectLabel(found.root);
     const work = { action: "start", what, agent: { client: args.client }, idempotency_key: leaseKey(key, n) };
@@ -131,13 +145,23 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
     state = { ...state, covered: state.turns, capturedAt: now, asked: asking ? choice.ask : state.asked, askedFrom };
     writeState(key, state, env);
   }
+  toldKey = key;
   return session === null ? null : callTool(session, "open", OPEN_ARGS, reported);
 });
 let notice;
 if (outcome.ok) {
   // null: a plugin hook standing down for the project's own install, whose Stop hook prints the line itself, or
   // Gemini CLI's AfterAgent, which leaves the line to SessionEnd.
-  notice = outcome.value === null ? "" : `${summarizeOpen(outcome.value, OPEN_ARGS.limit)}\n`;
+  const told = toldKey === null ? null : readTold(toldKey, env);
+  const said = outcome.value === null ? { line: "", named: [] } : needsYouLine(outcome.value, OPEN_ARGS.limit, told);
+  notice = said.line === "" ? "" : `${said.line}\n`;
+  if (toldKey !== null && told !== null && said.named.length > 0) {
+    try {
+      writeTold(toldKey, [...told, ...said.named], env);
+    } catch {
+      // an item named again next turn is better than a failed turn's end
+    }
+  }
 } else {
   notice = `koalafix: stop hook skipped: ${messageOf(outcome.error)}\n`;
   if (project !== null && !afterAgent && !(outcome.error instanceof ToolError)) {

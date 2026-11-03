@@ -8,7 +8,7 @@
 // still answers: every request gets a JSON-RPC error that names the fix, so the client shows it instead of a bare
 // "failed to connect". It never prints the token.
 
-import { createBridge, resolveBridgeTarget, UNAUTHORIZED_CODE } from "./bridge-core.mjs";
+import { createBridge, resolveBridgeTarget, resolveUserBridgeTarget, UNAUTHORIZED_CODE } from "./bridge-core.mjs";
 import { parseHookArgs } from "./client.mjs";
 import { isRecord, messageOf } from "./connect.mjs";
 
@@ -17,11 +17,12 @@ const args = parseHookArgs(process.argv.slice(2));
 const write = (message) => process.stdout.write(`${message}\n`);
 const log = (line) => process.stderr.write(`${line}\n`);
 
-let problem = args.error ?? (args.user || args.project === null ? "the bridge needs --project <the absolute project folder>; run koalafix init again" : null);
+let problem = args.error ?? (!args.user && args.project === null ? "the bridge needs --project <the absolute project folder>, or --user; run koalafix init again" : null);
 let bridge = null;
 if (problem === null) {
   try {
-    const target = resolveBridgeTarget(args.project);
+    // --user (koalafix connect, ADR-0054): the person's own default server and token, no project file.
+    const target = args.user ? resolveUserBridgeTarget() : resolveBridgeTarget(args.project);
     bridge = createBridge({ ...target, write, log, userAgent: `koalafix-bridge (${args.client ?? "unknown"})` });
   } catch (error) {
     problem = messageOf(error);

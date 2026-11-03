@@ -6,9 +6,9 @@
 // (Copilot reaches them through a small adapter, plugins/koalafix-copilot/hooks/copilot.mjs).
 //   node scripts/hook-configs.mjs          rewrites the files
 //   node scripts/hook-configs.mjs --check  exits 1 when a file differs from what this table writes
-// Each client starts `node` with no shell between where it can (Claude Code's exec form), or with a command that
-// parses the same in sh, cmd and PowerShell. Codex on macOS and Linux goes through run.sh, which also finds a Node
-// that a desktop app's short PATH misses. No file here holds a token or a server address: the scripts read the
+// Each client starts `node` with a command that parses the same in every shell it uses. Claude Code wherever it has
+// a POSIX shell, and Codex on macOS and Linux, go through run.sh, which also finds a Node that a desktop app's short
+// PATH misses. No file here holds a token or a server address: the scripts read the
 // person's own credential from ~/.kalibrate/credentials.json at run time.
 
 import fs from "node:fs";
@@ -27,11 +27,36 @@ const HOOKS = {
 
 const SCRIPTS = "hooks/scripts";
 
-/** Claude Code: exec form, so no shell parses the path (Git Bash, or PowerShell on Windows without it). */
+/**
+ * Claude Code's hook command (KFIX-698). The exec form (`node` plus args) finds no Node on macOS when the desktop app's
+ * Code tab or an editor opened from the Dock hands hooks launchd's short PATH, so the hooks go through run.sh, which
+ * looks where Homebrew, nvm, Volta, fnm, asdf and mise put Node. Claude Code runs a shell-form hook with `sh -c` on
+ * macOS and Linux, Git Bash on Windows, and PowerShell on Windows without Git Bash (code.claude.com/docs/en/hooks, read
+ * 3 Nov 2026), and has no per-platform field, so one line serves all four: sh and bash `exec` run.sh and never reach
+ * the second command; PowerShell has no `exec`, says so on stderr, and runs `node` straight. Tested on 3 Nov 2026 in
+ * sh, Git Bash, Windows PowerShell 5.1 and PowerShell 7 (one run, stdin intact, exit 0), and in Claude Code 2.1.316 on
+ * Windows through Git Bash and through PowerShell.
+ */
+export function claudeCodeHookCommand(script, flags = "--user") {
+  const dir = `\${CLAUDE_PLUGIN_ROOT}/${SCRIPTS}`;
+  return `exec sh "${dir}/run.sh" ${script} ${flags}; node "${dir}/${script}.mjs" ${flags}`;
+}
+
+/**
+ * Claude Code's MCP headers helper for koalafix-auto's copy of the server, through run.sh for the same reason. Claude
+ * Code runs a headersHelper in its own shell, which on Windows is cmd.exe (3 Nov 2026: a `;` line failed there and a
+ * plain `node` line ran), so this line uses `||`, which cmd and sh both read: sh runs run.sh, which always exits 0 and
+ * prints `{}` without Node; where cmd finds no `sh` it runs `node` straight. headers.mjs --user exits 0 on every path,
+ * so the fallback never runs after a helper that printed. Tested in Claude Code 2.1.316 on Windows (sh on PATH, through
+ * run.sh) and in cmd.exe with no sh on PATH (through node).
+ */
+export const HEADERS_HELPER = `sh "\${CLAUDE_PLUGIN_ROOT}/${SCRIPTS}/run.sh" headers --user || node "\${CLAUDE_PLUGIN_ROOT}/${SCRIPTS}/headers.mjs" --user`;
+
+/** Claude Code: shell form, through run.sh where there is a POSIX shell and `node` straight in PowerShell. */
 function claudeCode() {
   const hook = (key) => {
     const { script, timeout } = HOOKS[key];
-    return { type: "command", command: "node", args: [`\${CLAUDE_PLUGIN_ROOT}/${SCRIPTS}/${script}.mjs`, "--user"], timeout };
+    return { type: "command", command: claudeCodeHookCommand(script), timeout };
   };
   return {
     description: "KoalaFix team memory, automatic: the brief at session start, recall on each prompt, and now and then your AI saves the decisions made to the team (never in a claude -p or SDK run). Does nothing in a project with its own koalafix init install. Needs Node.js 22 or later; without it the hooks do nothing.",

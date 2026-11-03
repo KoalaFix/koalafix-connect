@@ -28,7 +28,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { copyProblems } from "./copies.mjs";
-import { HOOK_FILES, text } from "./hook-configs.mjs";
+import { HEADERS_HELPER, HOOK_FILES, text } from "./hook-configs.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const scripts = path.join(root, "plugins", "koalafix-auto", "hooks", "scripts");
@@ -173,9 +173,9 @@ const autoServer = JSON.parse(read(autoManifest)).mcpServers?.koalafix;
 if (autoServer === undefined || autoServer.url !== listedServer?.url) {
   problems.push(`${rel(autoManifest)} must declare the koalafix server at the koalafix plugin's URL (${listedServer?.url})`);
 } else {
-  const helper = /^node "\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/scripts\/([a-z-]+\.mjs)" --user$/.exec(String(autoServer.headersHelper));
-  if (helper === null || !fs.existsSync(path.join(scripts, helper[1]))) {
-    problems.push(`${rel(autoManifest)}: the koalafix server's headersHelper must run a copied hook script with --user`);
+  // Through run.sh, so a Node a desktop app's short PATH misses on macOS is still found (scripts/hook-configs.mjs).
+  if (autoServer.headersHelper !== HEADERS_HELPER || !fs.existsSync(path.join(scripts, "headers.mjs")) || !fs.existsSync(path.join(scripts, "run.sh"))) {
+    problems.push(`${rel(autoManifest)}: the koalafix server's headersHelper must be exactly ${JSON.stringify(HEADERS_HELPER)}, with headers.mjs and run.sh copied`);
   }
 }
 if (files.some((file) => rel(file).startsWith("plugins/koalafix/") && /\.json$/.test(file) && read(file).includes("headersHelper"))) {
