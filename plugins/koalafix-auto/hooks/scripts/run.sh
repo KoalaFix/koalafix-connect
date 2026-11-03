@@ -2,24 +2,31 @@
 # SPDX-License-Identifier: LicenseRef-KoalaFix-Proprietary
 # Copyright 2026 KoalaFix PTY LTD
 
-# Starts one KoalaFix hook script with Node, for a client that runs hooks through sh (Codex on macOS and Linux).
-#   sh run.sh <session-start|prompt|stop|session-end> [the script's flags]
+# Starts one KoalaFix hook script with Node, for a client that runs hooks through sh (Claude Code and Codex on macOS
+# and Linux), and Claude Code's MCP headers helper the same way.
+#   sh run.sh <session-start|prompt|stop|session-end|headers> [the script's flags]
 # A desktop app started from the Dock or Finder hands its hooks a short PATH (/usr/bin:/bin:/usr/sbin:/sbin) that
 # misses a Node from Homebrew, nvm, Volta, fnm, asdf or mise, so this also looks in those places. With no Node at
 # all it prints what the client needs to read "no change" and exits 0: a hook never blocks or breaks a session.
 # It reads nothing and sends nothing itself; stdin passes straight to the script.
 
+hook=${1-}
+[ $# -gt 0 ] && shift
+
 quiet() {
-  # Codex, Cursor and Gemini CLI read stdout as JSON, so "nothing to add" is {} for them.
+  # Claude Code reads the headers helper's stdout as a JSON object of headers, so "no headers" is {} (it then signs
+  # in with OAuth). Codex, Cursor and Gemini CLI read a hook's stdout as JSON, so "nothing to add" is {} for them.
+  if [ "$hook" = headers ]; then
+    printf '{}\n'
+    return
+  fi
   for arg in "$@"; do
     case $arg in codex | cursor | gemini-cli) printf '{}\n' && return ;; esac
   done
 }
 
-hook=${1-}
-[ $# -gt 0 ] && shift
 case $hook in
-  session-start | prompt | stop | session-end) ;;
+  session-start | prompt | stop | session-end | headers) ;;
   *)
     echo "koalafix: run.sh was given no known hook" >&2
     quiet "$@"

@@ -18,6 +18,8 @@ import { appendSpool } from "./spool.mjs";
 import { ENDED_OUTCOME, readState, removeState, sessionIdOf, sessionKey } from "./wip.mjs";
 import { endPassDue, startEndPass } from "./capture-end.mjs";
 import { forgetModel, provenanceMeta } from "./provenance.mjs";
+import { removeGate } from "./gate.mjs";
+import { closeArgs } from "./lease-close.mjs";
 
 const env = process.env;
 const args = parseHookArgs(process.argv.slice(2));
@@ -37,6 +39,8 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.sessionEnd), async (
   const { found, target } = located;
   const project = found.root;
   const key = sessionKey(project, sessionId);
+  // The first-edit gate's session cache is only good for this session.
+  removeGate(key, env);
   const state = readState(key, env);
   // Claude Code only: the decision capture's last pass over turns no capture covered (capture-end.mjs).
   const cwd = env.CLAUDE_PROJECT_DIR ?? (typeof input.cwd === "string" ? input.cwd : project);
@@ -50,9 +54,9 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.sessionEnd), async (
     await startPass();
     return "no lease";
   }
-  const pending = { action: "done", lease: state.lease, outcome: ENDED_OUTCOME, idempotency_key: `hook-wip-done:${key}:${state.leases}` };
+  const pending = closeArgs(key, state, ENDED_OUTCOME);
   removeState(key, env);
-  appendSpool({ source: "session-end", project, tool: "work", arguments: pending, reason: "queued before the close, in case the session exits first" }, env);
+  appendSpool({ source: "session-end", project, server: target.url, tool: "work", arguments: pending, reason: "queued before the close, in case the session exits first" }, env);
   // Once the close is durable: the close reports the session's repo and model too, then the kept model goes.
   const reported = provenanceMeta(project, input, key, env);
   forgetModel(key, env);

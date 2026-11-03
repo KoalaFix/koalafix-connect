@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: LicenseRef-KoalaFix-Proprietary
+# Copyright 2026 KoalaFix PTY LTD
+
+# The koalafix-auto plugin's Claude Code hooks and MCP headers helper, run the way Claude Code runs them (KFIX-698).
+# macOS: with launchd's short PATH, the PATH the Claude desktop app's Code tab and an editor opened from the Dock hand
+# their hooks, which misses Homebrew's Node; run.sh must still find it. Windows: through Git Bash, PowerShell and cmd.
+# Then the repository's own checks and Claude Code's strict plugin validation. This repository is public, so
+# GitHub-hosted runners cost nothing.
+
+name: hooks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos-short-path:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Node 22 with Homebrew
+        run: |
+          brew install node@22
+          brew link --overwrite --force node@22
+          "$(brew --prefix)/bin/node" --version
+      - name: Hooks and headers helper find Node with PATH=/usr/bin:/bin:/usr/sbin:/sbin
+        run: node scripts/hook-path-check.mjs
+      - name: Repository checks
+        run: node scripts/check.mjs
+      - name: Claude Code plugin validation
+        run: |
+          npm install --global @anthropic-ai/claude-code
+          claude plugin validate ./plugins/koalafix-auto --strict
+
+  windows-shells:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Hooks through Git Bash and PowerShell, headers helper through cmd
+        run: node scripts/hook-path-check.mjs
+      - name: Repository checks
+        run: node scripts/check.mjs

@@ -160,7 +160,8 @@ export function codexSource(transcriptPath) {
  *   with the session's source. `codex exec resume` of a terminal session keeps "cli" there, so a session whose turn
  *   runs with approvals off (`permission_mode` "bypassPermissions", what `codex exec` runs with unless told otherwise)
  *   never counts, nor does one whose transcript cannot be read.
- * - Cursor and Gemini CLI: never. Their scripted runs give a hook the same input, environment and pipes as a person's.
+ * - Cursor, Gemini CLI and Copilot: never. Their scripted runs give a hook the same input, environment and pipes as a
+ *   person's (`copilot -p` included).
  * @param {Record<string, string | undefined>} env
  * @param {string} [client]
  * @param {unknown} [input] the hook's input

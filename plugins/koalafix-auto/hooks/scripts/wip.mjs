@@ -147,6 +147,10 @@ export function readState(key, env = process.env) {
       // The characters the prompt hook has injected this session, and whether the spent line went out (KOA2-138).
       injected: Number.isInteger(parsed.injected) && parsed.injected >= 0 ? parsed.injected : 0,
       spent: parsed.spent === true,
+      // The session's project folder, server (MCP url) and transcript, for a later session start's sweep (KOA2-531).
+      root: typeof parsed.root === "string" && path.isAbsolute(parsed.root) ? parsed.root : null,
+      server: typeof parsed.server === "string" && /^https?:\/\//.test(parsed.server) ? parsed.server : null,
+      transcript: typeof parsed.transcript === "string" ? parsed.transcript : null,
     };
   } catch {
     return null;
@@ -164,6 +168,35 @@ export function writeState(key, state, env = process.env) {
 
 export function removeState(key, env = process.env) {
   fs.rmSync(statePath(key, env), { force: true });
+  fs.rmSync(toldPath(key, env), { force: true });
+}
+
+/**
+ * The open items the Stop hook has named this session (KOA2-545), in a file of its own: it works in a session whose
+ * prompt hook kept no state, and a Stop hook writing it never overwrites what the other hooks wrote meanwhile.
+ */
+function toldPath(key, env) {
+  return path.join(kalibrateHome(env), "sessions", `${key}.told.json`);
+}
+
+/** The ids the Stop hook has named this session; none when it has named nothing yet or the file is unreadable. */
+export function readTold(key, env = process.env) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(toldPath(key, env), "utf8"));
+    return Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Writes the named ids through a temporary file and a rename, as writeState does. */
+export function writeTold(key, ids, env = process.env) {
+  const file = toldPath(key, env);
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  const temp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(temp, `${JSON.stringify(ids)}
+`, { mode: 0o600 });
+  fs.renameSync(temp, file);
 }
 
 /** Whether the session's lease can still be counted on: it exists and has more than a minute left. */
@@ -184,16 +217,21 @@ function list(result, name) {
   return isRecord(result) && Array.isArray(result[name]) ? result[name].filter(isRecord) : [];
 }
 
+/** A person by display name, else their handle (KOA2-542): the row's `<field>_name` beside its `<field>`. */
+function person(row, field, max) {
+  return str(row[`${field}_name`], max) || str(row[field], max);
+}
+
 function factLine(fact) {
   const value = "value" in fact ? ` = ${shownValue(fact.value)}` : "";
-  const owner = typeof fact.owner === "string" && fact.owner !== "" ? `, owner ${str(fact.owner, 40)}` : "";
+  const owner = typeof fact.owner === "string" && fact.owner !== "" ? `, owner ${person(fact, "owner", 40)}` : "";
   const told = typeof fact.instruction === "string" && fact.instruction !== "" ? ` ${str(fact.instruction, 160)}` : "";
   return `- ${str(fact.key, 80)}${value} (${str(fact.state, 20) || "?"}${owner})${told}`;
 }
 
 function workingLine(work) {
   const agent = typeof work.agent === "string" && work.agent !== "" ? ` (${str(work.agent, 30)})` : "";
-  return `- ${str(work.who, 40)}${agent}: ${str(work.what, 100)} [${str(work.lease, 20)}, started ${str(work.started_ago, 20)}, ends in ${str(work.ends_in, 20)}]`;
+  return `- ${person(work, "who", 40)}${agent}: ${str(work.what, 100)} [${str(work.lease, 20)}, started ${str(work.started_ago, 20)}, ends in ${str(work.ends_in, 20)}]`;
 }
 
 function changeLine(change) {
