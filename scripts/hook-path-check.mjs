@@ -66,8 +66,11 @@ function input(event) {
 }
 
 const lines = Object.entries(hooks).flatMap(([event, groups]) => groups.flatMap((group) => group.hooks.map((hook) => ({ event, command: fill(hook.command) }))));
-if (lines.length !== 4) {
-  problems.push(`expected the four Claude Code hooks, found ${lines.length}`);
+// One line per event; the list grows when a hook is added, so a dropped hook fails here too.
+const EVENTS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "Stop", "SessionEnd", "SubagentStart"];
+const found = lines.map((line) => line.event).sort().join(", ");
+if (found !== [...EVENTS].sort().join(", ")) {
+  problems.push(`expected the Claude Code hooks ${EVENTS.join(", ")}, found ${found}`);
 }
 
 if (process.platform === "darwin" || process.platform === "linux") {

@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: LicenseRef-KoalaFix-Proprietary
+# Copyright 2026 KoalaFix PTY LTD
+
+# The checks every change to the plugins runs before it ships (public repository, so GitHub's hosted runners).
+# scripts/check.mjs runs here without a kalibrate checkout (that repository is private): copies against the
+# sha256 in SOURCE, hook files, secrets, listings, the Copilot adapter's tests. Comparing the copies with the
+# kalibrate commit SOURCE names stays a local step: node scripts/check.mjs <path to kalibrate at that commit>.
+
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: scripts/check.mjs
+        run: node scripts/check.mjs
+      - name: claude plugin validate
+        run: |
+          npm install --global --no-audit --no-fund @anthropic-ai/claude-code@2.1.312
+          claude plugin validate .
+          for plugin in plugins/*/; do claude plugin validate "$plugin"; done

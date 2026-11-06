@@ -143,8 +143,9 @@ Codex, Cursor and Gemini CLI sign their KoalaFix tools in on their own, as above
 - Learned something durable: `remember`. A decision about the team's shared work (code, conventions, process,
   ownership, handoffs): `remember` it with kind `decision` and lane `team`, in your own words, never quoting the user (no `user_words`).
   Confirmed a fact still holds: `verify`.
-- When the task is finished: call `work` with action `done`. Call `open` to see what is still open for you.
-- `share` and `settle` only with the user's yes.
+- When the task is finished: call `work` with action `done`.
+- `share` and `settle` only with the user's yes, and leave open items you were not asked about alone: most close by themselves.
+- A link between two notes that is wrong (recall lists it under `related`): with the user's yes, drop it with `settle` on one note, `to` the other, action `dismiss`. There is no undo, and the pair is never linked again.
 
 ## Session hooks
 
