@@ -23,7 +23,7 @@
 // spaces read, beside the recall, before the lease start). A server that wants the handshake
 // gets it once, and the hook says so on stderr.
 
-import { BUDGETS, IDEMPOTENCY_META, ToolError, UNLOGGED_META, budgetFrom, callTool, connect, finish, messageOf, runWithBudget } from "./connect.mjs";
+import { BUDGETS, IDEMPOTENCY_META, ToolError, UNLOGGED_META, budgetFrom, callTool, connect, finish, isRecord, messageOf, runWithBudget } from "./connect.mjs";
 import { readHookInput } from "./project.mjs";
 import { locateHook, parseHookArgs, promptOutput } from "./client.mjs";
 import { NoCredentialError, signInStep } from "./device.mjs";
@@ -47,9 +47,27 @@ let notice = "";
 let session = null;
 
 /**
+ * The refusals of a lease start that cost the paths, never the lease: the server's write guard is stricter than the
+ * hook's own filter (`guard_rejected`), and a teammate's live lease may hold the files (`paths_held`, ADR-0079).
+ */
+const BARE_RETRY = new Set(["guard_rejected", "paths_held"]);
+
+/**
+ * The lease a start without paths took, with a hold's holders (`paths_held`'s `detail.held`, each a working line) added
+ * to its overlaps, so the first block warns of them as a collision, as it did when the server took such a claim.
+ */
+function withHolders(work, detail) {
+  const held = isRecord(detail) && Array.isArray(detail.held) ? detail.held.filter(isRecord) : [];
+  if (!isRecord(work) || held.length === 0) {
+    return work;
+  }
+  return { ...work, overlaps: [...(Array.isArray(work.overlaps) ? work.overlaps : []), ...held] };
+}
+
+/**
  * Starts lease number `n` for this session on `paths`, returning the `WorkResult` or null when the server refused it.
- * The server's write guard is stricter than the hook's own filter, so a path it refuses costs the paths, never the
- * lease: the start is tried once more without them, under its own idempotency key.
+ * A refusal in BARE_RETRY costs the paths, never the lease: the start is tried once more without them, under its own
+ * idempotency key, and never with `force` (only the person may choose to work alongside a holder).
  */
 async function startLease(session, key, n, what, client, reported, paths) {
   const attempt = async (idempotency, withPaths) => {
@@ -59,9 +77,9 @@ async function startLease(session, key, n, what, client, reported, paths) {
   try {
     return await attempt(leaseKey(key, n), paths.length > 0);
   } catch (error) {
-    if (paths.length > 0 && error instanceof ToolError && error.code === "guard_rejected") {
+    if (paths.length > 0 && error instanceof ToolError && BARE_RETRY.has(error.code)) {
       try {
-        return await attempt(`${leaseKey(key, n)}:bare`, false);
+        return withHolders(await attempt(`${leaseKey(key, n)}:bare`, false), error.detail);
       } catch (again) {
         notice += `koalafix: prompt hook could not start the WIP lease: ${messageOf(again)}\n`;
         return null;

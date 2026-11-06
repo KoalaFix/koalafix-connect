@@ -30,17 +30,20 @@ const HANDSHAKE_CODES = new Set([-32600, -32601]);
 
 /**
  * The server answered, but the call failed: a tool's refusal (`isError`) or a JSON-RPC error. Not a reason to spool.
- * `code` is the JSON-RPC error code, or null for a tool's refusal.
+ * `code` is the JSON-RPC error code, or null for a tool's refusal. `detail` is a refusal's structured detail (core's
+ * ToolError `detail`, such as `paths_held`'s holders), or null.
  */
 export class ToolError extends Error {
   /**
    * @param {string} message
    * @param {string | number | null} [code] the tool's refusal code (`rate_limited`), or the JSON-RPC error code
+   * @param {unknown} [detail] the refusal's `structuredContent.detail`
    */
-  constructor(message, code = null) {
+  constructor(message, code = null, detail = null) {
     super(message);
     this.name = "ToolError";
     this.code = code;
+    this.detail = detail;
   }
 }
 
@@ -339,7 +342,8 @@ export async function callTool(session, name, args, meta) {
   if (isRecord(result) && result.isError === true) {
     // Core's refusal text starts `error: <code>:`; the code lets a caller tell a write limit from a bad call.
     const code = /^error: ([a-z_]+):/.exec(text)?.[1] ?? null;
-    throw new ToolError(`${name} returned an error: ${text.slice(0, 200)}`, code);
+    const detail = isRecord(result.structuredContent) ? (result.structuredContent.detail ?? null) : null;
+    throw new ToolError(`${name} returned an error: ${text.slice(0, 200)}`, code, detail);
   }
   return { text, structured: isRecord(result) ? result.structuredContent : undefined };
 }
