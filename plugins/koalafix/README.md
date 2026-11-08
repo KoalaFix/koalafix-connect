@@ -6,14 +6,26 @@ and done so the next session and the rest of the team can pick up where it left 
 
 ## Install
 
-Claude (claude.ai, Cowork and Claude Code): the Claude marketplace lists one plugin, KoalaFix (`koalafix-auto`), which
-carries this plugin's server and skill plus the session hooks. In Claude Code 2.1.292 or later, one line:
+This plugin is the one the Claude directory lists. It carries the KoalaFix server and the skill and runs nothing on
+your machine. Claude Code, from a shell:
 
 ```
-claude plugin install koalafix-auto --marketplace KoalaFix/koalafix-connect
+claude plugin marketplace add KoalaFix/koalafix-connect
+claude plugin install koalafix@koalafix-connect
 ```
 
-On claude.ai, add the marketplace `KoalaFix/koalafix-connect` under Customize, Plugins, then add KoalaFix.
+Or inside a session:
+
+```
+/plugin install koalafix --marketplace KoalaFix/koalafix-connect
+```
+
+On claude.ai, add the marketplace `KoalaFix/koalafix-connect` under Customize, Plugins, then add `koalafix`.
+
+Want team memory to happen on its own in Claude Code (the team brief at session start, a recall on every prompt, a
+note before editing a file a teammate is on)? Install `koalafix-auto` from the same marketplace instead. It carries
+this plugin's server and skill plus the Claude Code hooks and a headers helper, which run Node.js scripts on your
+machine. Install one or the other, not both.
 
 Codex: `codex plugin marketplace add KoalaFix/koalafix-connect`, then `codex plugin add koalafix@koalafix-connect`.
 
@@ -52,8 +64,8 @@ choose to authenticate.
 - A link between two notes that is wrong (recall lists it under `related`): with the user's yes, drop it with `settle` on one note, `to` the other, action `dismiss`. There is no undo, and the pair is never linked again.
 
 Session hooks (the brief at session start, a recall on every prompt, the session's decisions saved to the team) are not part
-of this plugin. In Claude, install `koalafix-auto` instead (it carries this plugin's server and skill); in Codex and
-Cursor, install it beside this one.
+of this plugin. In Claude Code, install `koalafix-auto` from the same marketplace instead (it carries this plugin's
+server and skill); in Codex and Cursor, install it beside this one.
 
 ## Links
 

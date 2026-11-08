@@ -7,9 +7,20 @@
   "description": "One memory for every AI tool on your team. Facts show who checked them and when.",
   "plugins": [
     {
+      "name": "koalafix",
+      "source": "./plugins/koalafix",
+      "description": "KoalaFix's tools and skill: shared team memory, with who checked each fact and when, and work items. One remote server at https://mcp.koalafix.com/mcp; you sign in through the browser the first time a tool is used. Runs nothing on your machine: no scripts, no hooks, no helper program. Pick this one on claude.ai and in Cowork, or in Claude Code when you want the tools without the automatic hooks. This is the plugin listed in the Claude directory.",
+      "category": "development",
+      "tags": [
+        "memory",
+        "team",
+        "work-items"
+      ]
+    },
+    {
       "name": "koalafix-auto",
       "source": "./plugins/koalafix-auto",
-      "description": "One memory for every AI tool on your team. In Claude chat and Cowork: KoalaFix's tools and skill. In Claude Code its hooks make it automatic: the team brief at session start, recall on each prompt, a warning before editing a file a teammate has checked in on, one browser sign-in. The hooks send each prompt (keys and tokens removed, never logged) and the file paths it names to your KoalaFix server; teammates see your project, branch and those paths. The hooks need Node.js 22+.",
+      "description": "The same tools and skill as koalafix, plus the Claude Code hooks and the headers helper that make team memory automatic: the team brief at session start, recall on each prompt, a note before editing a file a teammate is on, one browser sign-in. Pick this one in Claude Code when you want the hooks. They send each prompt (keys and tokens removed, never logged) and the file paths it names to your KoalaFix server; teammates see your project, branch and those paths. Needs Node.js 22+.",
       "category": "development",
       "tags": [
         "memory",
