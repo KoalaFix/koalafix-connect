@@ -11,15 +11,19 @@
 //    commit (the copies are not behind).
 // 4. No file holds a token, a key or a bearer header, and no hook file names a server: the scripts find the
 //    person's server and token at run time, so the bundle carries neither.
-// 5. The listed koalafix plugin stays hook-free, so the OpenAI directory still takes it.
+// 5. The listed koalafix plugin runs nothing on the machine, so the OpenAI and Claude directories take it: no hooks, no
+//    headersHelper, no headers, no displayName in its Claude manifest (the Claude directory refused koalafix-auto 0.5.3
+//    and 0.5.9 for command hooks and a headersHelper, accepted only from Verified organisations, and flagged a field
+//    from another tool's manifest), and its skill byte-identical to koalafix-auto's copy.
 // 6. The Copilot plugin's copies (scripts, skill, licence) equal their originals (scripts/copies.mjs), it ships no
 //    other file, its adapter exists, its marketplace entry matches its name, version and folder, its mcp.json names
 //    exactly the koalafix plugin's server, and the adapter's tests pass.
 // 7. koalafix-auto's copy of the koalafix server (Claude Code) has the koalafix plugin's URL and runs a copied helper
 //    with --user, and the listed plugin names no helper.
-// 8. The Claude marketplace lists one plugin, koalafix-auto, whole on its own: no dependency (claude.ai skips them, so
-//    people had to add koalafix by hand) and its own copy of the skill at a path only its Claude manifest names; every
-//    Claude plugin and marketplace description is at most 500 characters, as claude.ai's upload refuses longer ones.
+// 8. The Claude marketplace lists koalafix (the directory plugin) and koalafix-auto, each whole on its own: no
+//    dependency (claude.ai skips them, so people had to add koalafix by hand) and koalafix-auto's own copy of the skill
+//    at a path only its Claude manifest names; every Claude plugin and marketplace description is at most 500
+//    characters, as claude.ai's upload refuses longer ones.
 // Exits 1 and names each problem.
 
 import { execFileSync } from "node:child_process";
@@ -181,11 +185,32 @@ if (autoServer === undefined || autoServer.url !== listedServer?.url) {
 if (files.some((file) => rel(file).startsWith("plugins/koalafix/") && /\.json$/.test(file) && read(file).includes("headersHelper"))) {
   problems.push("plugins/koalafix names a headersHelper: the listed plugin must run nothing on the machine");
 }
+for (const [name, entry] of Object.entries(servers(path.join(listed, ".mcp.json")))) {
+  const extra = Object.keys(entry).filter((key) => key !== "type" && key !== "url");
+  if (extra.length > 0) {
+    problems.push(`plugins/koalafix/.mcp.json server ${name} has ${extra.join(", ")}: the listed plugin names its server by type and url only (no headers, nothing run)`);
+  }
+}
+const listedClaude = JSON.parse(read(path.join(listed, ".claude-plugin", "plugin.json")));
+for (const key of ["displayName", "hooks", "mcpServers", "agents", "commands", "lspServers", "outputStyles"].filter((key) => key in listedClaude)) {
+  problems.push(`plugins/koalafix/.claude-plugin/plugin.json has ${key}: the Claude directory flags fields from other tools' manifests and anything run on the machine; the server comes from .mcp.json and the skill from skills/`);
+}
+if (listedClaude.name !== "koalafix" || !/^\d+\.\d+\.\d+$/.test(String(listedClaude.version))) {
+  problems.push("plugins/koalafix/.claude-plugin/plugin.json must be named koalafix with a semver version");
+}
+for (const other of [".codex-plugin", ".cursor-plugin"].map((dir) => path.join(listed, dir, "plugin.json"))) {
+  if (JSON.parse(read(other)).version !== listedClaude.version) {
+    problems.push(`${rel(other)} is not at ${listedClaude.version}, the version in the Claude manifest: the koalafix plugin has one version`);
+  }
+}
+if (read(path.join(listed, "skills", "koalafix", "SKILL.md")) !== read(path.join(root, "plugins", "koalafix-auto", "claude-skills", "koalafix", "SKILL.md"))) {
+  problems.push("plugins/koalafix/skills/koalafix/SKILL.md differs from koalafix-auto's claude-skills copy (run: node scripts/copies.mjs)");
+}
 
 const claudeMarket = JSON.parse(read(path.join(root, ".claude-plugin", "marketplace.json")));
 const claudeListed = (claudeMarket.plugins ?? []).map((entry) => `${entry.name} ${entry.source}`);
-if (claudeListed.join("|") !== "koalafix-auto ./plugins/koalafix-auto") {
-  problems.push(`.claude-plugin/marketplace.json must list koalafix-auto alone, from ./plugins/koalafix-auto (one plugin to add on claude.ai); it lists: ${claudeListed.join(", ") || "nothing"}`);
+if (claudeListed.join("|") !== "koalafix ./plugins/koalafix|koalafix-auto ./plugins/koalafix-auto") {
+  problems.push(`.claude-plugin/marketplace.json must list koalafix (./plugins/koalafix, the directory plugin) then koalafix-auto (./plugins/koalafix-auto), nothing else; it lists: ${claudeListed.join(", ") || "nothing"}`);
 }
 const autoClaude = JSON.parse(read(autoManifest));
 if (autoClaude.dependencies !== undefined) {

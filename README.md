@@ -15,10 +15,11 @@ MCP server address and the agent instructions. The KoalaFix service itself is no
 - Give the agent the KoalaFix session routine: a skill in Claude Code and Codex, an always-applied rule in
   Cursor, and a context file in Gemini CLI.
 - The `koalafix` plugin contains no scripts, no hooks, no tokens and no telemetry, and runs nothing on your machine.
-- For Claude (chat, Cowork and Claude Code) the marketplace lists one plugin, **KoalaFix** (`koalafix-auto`): the
-  server, the skill and the session hooks together, so there is one thing to add. Chat runs no hooks; Cowork loads them
-  but they do nothing there yet; in Claude Code they make team memory automatic, and its copy of the KoalaFix server
-  uses the hooks' sign-in, so you sign in once.
+- For Claude the marketplace lists two plugins. `koalafix` is the server and the skill alone, and the one the Claude
+  directory lists: it runs nothing on your machine. **KoalaFix** (`koalafix-auto`) is the same plus the session hooks
+  and a headers helper for Claude Code: there they make team memory automatic, and its copy of the KoalaFix server uses
+  the hooks' sign-in, so you sign in once. Chat runs no hooks; Cowork loads them but they do nothing there yet. In
+  Claude, install one or the other, not both.
 - KoalaFix is invite-only for now: open the invite link your team sent and sign up from it before you add any plugin,
   or the sign-in works and the server then turns your assistant away. No invite yet? Ask your team's admin.
 - In Codex and Cursor, the optional `koalafix-auto` plugin adds the hooks beside `koalafix`; the `koalafix-copilot`
@@ -54,9 +55,14 @@ On older releases, or inside a session:
 /plugin install koalafix-auto@koalafix-connect
 ```
 
-It carries the server, the skill and the hooks; nothing else to install. Installed `koalafix` before? Remove it
-(`claude plugin uninstall koalafix@koalafix-connect`): the Claude marketplace no longer lists it, and `koalafix-auto`
-has its own copy of the skill.
+It carries the server, the skill and the hooks; nothing else to install. Without the hooks (the tools and the skill
+only, nothing run on your machine), install `koalafix` from the same marketplace instead:
+
+```
+claude plugin install koalafix --marketplace KoalaFix/koalafix-connect
+```
+
+One or the other, not both: `koalafix-auto` already carries its own copy of the skill and of the server.
 
 ### Codex
 
