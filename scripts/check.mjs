@@ -14,7 +14,7 @@
 // 5. The listed koalafix plugin runs nothing on the machine, so the OpenAI and Claude directories take it: no hooks, no
 //    headersHelper, no headers, no displayName in its Claude manifest (the Claude directory refused koalafix-auto 0.5.3
 //    and 0.5.9 for command hooks and a headersHelper, accepted only from Verified organisations, and flagged a field
-//    from another tool's manifest), and its skill byte-identical to koalafix-auto's copy.
+//    from another tool's manifest), and its skill identical to koalafix-auto's copy (scripts/copies.mjs, in 6).
 // 6. The Copilot plugin's copies (scripts, skill, licence) equal their originals (scripts/copies.mjs), it ships no
 //    other file, its adapter exists, its marketplace entry matches its name, version and folder, its mcp.json names
 //    exactly the koalafix plugin's server, and the adapter's tests pass.
@@ -191,9 +191,13 @@ for (const [name, entry] of Object.entries(servers(path.join(listed, ".mcp.json"
     problems.push(`plugins/koalafix/.mcp.json server ${name} has ${extra.join(", ")}: the listed plugin names its server by type and url only (no headers, nothing run)`);
   }
 }
+// The directory flagged an unrecognised field and a field from another tool's manifest (displayName), and refuses
+// anything run on the machine: the Claude manifest carries exactly these keys; the server comes from .mcp.json and the
+// skill from skills/, both found by their default paths.
+const LISTED_CLAUDE_KEYS = ["name", "version", "description", "author", "homepage", "repository", "license", "keywords", "icon", "documentationUrl", "supportUrl", "privacyPolicyUrl", "termsOfServiceUrl"];
 const listedClaude = JSON.parse(read(path.join(listed, ".claude-plugin", "plugin.json")));
-for (const key of ["displayName", "hooks", "mcpServers", "agents", "commands", "lspServers", "outputStyles"].filter((key) => key in listedClaude)) {
-  problems.push(`plugins/koalafix/.claude-plugin/plugin.json has ${key}: the Claude directory flags fields from other tools' manifests and anything run on the machine; the server comes from .mcp.json and the skill from skills/`);
+for (const key of Object.keys(listedClaude).filter((key) => !LISTED_CLAUDE_KEYS.includes(key))) {
+  problems.push(`plugins/koalafix/.claude-plugin/plugin.json has ${key}: the listed plugin's Claude manifest carries only ${LISTED_CLAUDE_KEYS.join(", ")}`);
 }
 if (listedClaude.name !== "koalafix" || !/^\d+\.\d+\.\d+$/.test(String(listedClaude.version))) {
   problems.push("plugins/koalafix/.claude-plugin/plugin.json must be named koalafix with a semver version");
@@ -202,9 +206,6 @@ for (const other of [".codex-plugin", ".cursor-plugin"].map((dir) => path.join(l
   if (JSON.parse(read(other)).version !== listedClaude.version) {
     problems.push(`${rel(other)} is not at ${listedClaude.version}, the version in the Claude manifest: the koalafix plugin has one version`);
   }
-}
-if (read(path.join(listed, "skills", "koalafix", "SKILL.md")) !== read(path.join(root, "plugins", "koalafix-auto", "claude-skills", "koalafix", "SKILL.md"))) {
-  problems.push("plugins/koalafix/skills/koalafix/SKILL.md differs from koalafix-auto's claude-skills copy (run: node scripts/copies.mjs)");
 }
 
 const claudeMarket = JSON.parse(read(path.join(root, ".claude-plugin", "marketplace.json")));

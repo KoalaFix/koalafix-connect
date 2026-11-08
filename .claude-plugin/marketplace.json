@@ -9,7 +9,7 @@
     {
       "name": "koalafix",
       "source": "./plugins/koalafix",
-      "description": "KoalaFix's tools and skill: shared team memory, with who checked each fact and when, and work items. One remote server at https://mcp.koalafix.com/mcp; you sign in in the browser the first time a tool is used. Runs nothing on your machine: no scripts, no hooks, no helper program. Pick this one on claude.ai and in Cowork, or in Claude Code when you want the tools without the automatic hooks. This is the plugin listed in the Claude directory.",
+      "description": "KoalaFix's tools and skill: shared team memory, with who checked each fact and when, and work items. One remote server at https://mcp.koalafix.com/mcp; you sign in through the browser the first time a tool is used. Runs nothing on your machine: no scripts, no hooks, no helper program. Pick this one on claude.ai and in Cowork, or in Claude Code when you want the tools without the automatic hooks. This is the plugin listed in the Claude directory.",
       "category": "development",
       "tags": [
         "memory",

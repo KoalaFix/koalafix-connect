@@ -20,7 +20,7 @@ Or inside a session:
 /plugin install koalafix --marketplace KoalaFix/koalafix-connect
 ```
 
-On claude.ai, add the marketplace `KoalaFix/koalafix-connect` under Customize, Plugins, then add KoalaFix.
+On claude.ai, add the marketplace `KoalaFix/koalafix-connect` under Customize, Plugins, then add `koalafix`.
 
 Want team memory to happen on its own in Claude Code (the team brief at session start, a recall on every prompt, a
 note before editing a file a teammate is on)? Install `koalafix-auto` from the same marketplace instead. It carries

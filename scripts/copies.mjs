@@ -3,7 +3,7 @@
 
 // Files carried as exact copies: the Copilot plugin's, and koalafix-auto's Claude copy of the skill. A Copilot plugin
 // installs only its own folder, so it cannot reach koalafix-auto's scripts or the koalafix plugin's skill, and
-// koalafix-auto is the one plugin the Claude marketplace lists: scripts/sync-hooks.mjs writes the copies, and
+// koalafix-auto, listed beside koalafix on the Claude marketplace, carries the skill itself: scripts/sync-hooks.mjs writes the copies, and
 // scripts/check.mjs fails when one differs from its original (line endings aside), or when the plugin holds a file
 // that is not on the list below. Never edit a copy.
 
@@ -20,8 +20,9 @@ export const COPILOT_SCRIPTS = "plugins/koalafix-copilot/hooks/scripts";
 export const COPIED_FILES = {
   "plugins/koalafix-copilot/skills/koalafix/SKILL.md": "plugins/koalafix/skills/koalafix/SKILL.md",
   "plugins/koalafix-copilot/LICENSE": "plugins/koalafix-auto/LICENSE",
-  // koalafix-auto is the one plugin the Claude marketplace lists, so it carries the skill itself, at a path only its
-  // Claude manifest names: Codex and Cursor, which list koalafix beside it, never load a second copy.
+  // koalafix-auto carries the skill itself (claude.ai skips plugin dependencies), at a path only its Claude manifest
+  // names: Codex and Cursor, which list koalafix beside it, never load a second copy. The listed koalafix plugin's
+  // skill is the original, so the two stay identical.
   "plugins/koalafix-auto/claude-skills/koalafix/SKILL.md": "plugins/koalafix/skills/koalafix/SKILL.md",
   "plugins/koalafix-auto/assets/koalafix-512.png": "plugins/koalafix/assets/koalafix-512.png",
 };
