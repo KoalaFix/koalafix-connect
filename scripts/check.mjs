@@ -24,6 +24,8 @@
 //    dependency (claude.ai skips them, so people had to add koalafix by hand) and koalafix-auto's own copy of the skill
 //    at a path only its Claude manifest names; every Claude plugin and marketplace description is at most 500
 //    characters, as claude.ai's upload refuses longer ones.
+// 9. Every file in the listed koalafix plugin is a type the Claude directory takes from an unverified organisation:
+//    Markdown, text, JSON, YAML, or a real PNG, JPEG, GIF, WebP or ICO; UTF-8, no NUL, no #!, no package config.
 // Exits 1 and names each problem.
 
 import { execFileSync } from "node:child_process";
@@ -205,6 +207,38 @@ if (listedClaude.name !== "koalafix" || !/^\d+\.\d+\.\d+$/.test(String(listedCla
 for (const other of [".codex-plugin", ".cursor-plugin"].map((dir) => path.join(listed, dir, "plugin.json"))) {
   if (JSON.parse(read(other)).version !== listedClaude.version) {
     problems.push(`${rel(other)} is not at ${listedClaude.version}, the version in the Claude manifest: the koalafix plugin has one version`);
+  }
+}
+
+// From an organisation that is not Verified, the Claude directory takes only Markdown, text, JSON, YAML and PNG, JPEG,
+// GIF, WebP or ICO images (judged by content, not name): no file starting with #!, no package manager config, text
+// UTF-8 with no NUL byte. It refused koalafix 0.2.0 for an SVG logo. Images are checked by their magic bytes.
+const TEXT_TYPE = /\.(md|mdc|txt|json|ya?ml)$|\/(LICENSE|README)$/;
+const IMAGE_MAGIC = { png: "89504e47", jpg: "ffd8ff", jpeg: "ffd8ff", gif: "47494638", webp: "52494646", ico: "00000100" };
+const PACKAGE_CONFIG = /\/(package(-lock)?\.json|pnpm-(workspace|lock)\.yaml|yarn\.lock|\.npmrc|\.yarnrc(\.yml)?|bun\.lockb?)$/;
+const utf8 = new TextDecoder("utf-8", { fatal: true });
+for (const full of files.filter((file) => rel(file).startsWith("plugins/koalafix/"))) {
+  const name = rel(full);
+  const bytes = fs.readFileSync(full);
+  const ext = name.split(".").pop().toLowerCase();
+  if (PACKAGE_CONFIG.test(name)) {
+    problems.push(`${name} is package manager config, which the Claude directory refuses from an unverified organisation`);
+  } else if (ext in IMAGE_MAGIC) {
+    if (!bytes.toString("hex").startsWith(IMAGE_MAGIC[ext])) {
+      problems.push(`${name} is not the ${ext.toUpperCase()} image its name says, which the Claude directory refuses`);
+    }
+  } else if (!TEXT_TYPE.test(name)) {
+    problems.push(`${name} is not Markdown, text, JSON, YAML or a PNG, JPEG, GIF, WebP or ICO image: the Claude directory refuses it from an unverified organisation (keep sources such as SVGs outside plugins/koalafix)`);
+  } else {
+    let text = null;
+    try {
+      text = utf8.decode(bytes);
+    } catch {
+      // not UTF-8: reported below
+    }
+    if (text === null || text.includes("\0") || text.startsWith("#!")) {
+      problems.push(`${name} must be UTF-8 text with no NUL byte that does not start with #!`);
+    }
   }
 }
 
