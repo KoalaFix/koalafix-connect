@@ -1,9 +1,11 @@
 # KoalaFix (`koalafix-auto`)
 
-For Claude this is the one KoalaFix plugin: the server, the skill and the session hooks together, on claude.ai, in
-Cowork and in Claude Code. Chat runs no hooks, and in Cowork they load but do nothing yet (there is no sign-in file
-there), so in both it adds the tools and the skill. In Codex and Cursor it adds
-the hooks beside the `koalafix` plugin. With the tools alone, the agent recalls and records work when it decides to;
+For Claude the marketplace lists two KoalaFix plugins; install one or the other, not both. `koalafix` is the server
+and the skill alone, runs nothing on your machine, and is the one the Claude directory lists. This one,
+`koalafix-auto`, is the same plus the session hooks below and a headers helper: pick it in Claude Code when you want
+team memory to happen on its own, and you sign in once, because its copy of the server uses the hooks' sign-in. Chat
+runs no hooks, and in Cowork they load but do nothing yet (there is no sign-in file there), so in both it adds only
+the tools and the skill, the same as `koalafix`. In Codex and Cursor it adds the hooks beside the `koalafix` plugin. With the tools alone, the agent recalls and records work when it decides to;
 with the hooks, it happens on every session:
 
 - **Session start:** the team's brief goes in front of the session: facts, the team's current decisions (the ones
