@@ -218,11 +218,16 @@ export function captureDue(state, now, every) {
 }
 
 const WHAT = "save each decision this session made about the team's shared work (code, conventions, process, ownership, handoffs), so teammates' assistants know it";
+// KFIX-771 (the KFIX-770 audit): a changed decision goes under the key that held the old state, so recall never serves
+// the old value as clear beside a keyless note; and the no-duplicates rule names the edit route, so a correction is an
+// edit, not a second note that contradicts the first.
 const RULES = [
   "Write each one in your own words: one or two sentences on what was decided and why.",
   "Never quote the person's messages or copy any prompt text, and do not set user_words.",
   "Leave out anything personal (health, HR, pay, private life) and any secret, token or credential.",
-  "Skip every decision this session already saved to the team: look at your earlier koalafix remember calls, and never save one again in other words, even when its answer said duplicate or near_duplicate.",
+  "A decision that changes a fact already saved under a key goes under that key (recall it, then remember with that key, the new value and replaces: its current ref), not into a decision note.",
+  'A decision note about a saved key passes links: [{kind: "about", to: "<that key>"}].',
+  "Skip every decision this session already saved to the team: look at your earlier koalafix remember calls, and do not save it again in other words, even when its answer said duplicate or near_duplicate; to correct one, edit that note by id, or give its key the new value, instead of saving another.",
 ].join(" ");
 
 /**
