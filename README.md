@@ -84,8 +84,9 @@ repository as a team marketplace under Dashboard, Plugins & MCPs. Add `koalafix-
 the session hooks.
 
 Until the Marketplace listing is live, if you are not on Teams or Enterprise, the Add to Cursor button gives you the
-MCP server only: no rule and no hooks. To get the rule, copy `plugins/koalafix/rules/koalafix.mdc` from this
-repository into your project's `.cursor/rules/`.
+MCP server only: no rule and no hooks. To get the rule, copy `plugins/koalafix/rules/koalafix.md` from this
+repository into your project's `.cursor/rules/koalafix.mdc` (Cursor reads only `.mdc` files there; the plugin's own
+rules folder takes `.md`, which is what the Claude directory accepts).
 
 ### Gemini CLI
 
