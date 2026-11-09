@@ -25,7 +25,8 @@
 //    at a path only its Claude manifest names; every Claude plugin and marketplace description is at most 500
 //    characters, as claude.ai's upload refuses longer ones.
 // 9. Every file in the listed koalafix plugin is a type the Claude directory takes from an unverified organisation:
-//    Markdown, text, JSON, YAML, or a real PNG, JPEG, GIF, WebP or ICO; UTF-8, no NUL, no #!, no package config.
+//    Markdown (.md), text, JSON, YAML, or a real PNG, JPEG, GIF, WebP or ICO, judged by name and content; UTF-8, no
+//    NUL, no #!, no package config. The directory refused 0.2.1 for a clean UTF-8 .mdc rule, so the extension counts.
 // Exits 1 and names each problem.
 
 import { execFileSync } from "node:child_process";
@@ -211,9 +212,10 @@ for (const other of [".codex-plugin", ".cursor-plugin"].map((dir) => path.join(l
 }
 
 // From an organisation that is not Verified, the Claude directory takes only Markdown, text, JSON, YAML and PNG, JPEG,
-// GIF, WebP or ICO images (judged by content, not name): no file starting with #!, no package manager config, text
-// UTF-8 with no NUL byte. It refused koalafix 0.2.0 for an SVG logo. Images are checked by their magic bytes.
-const TEXT_TYPE = /\.(md|mdc|txt|json|ya?ml)$|\/(LICENSE|README)$/;
+// GIF, WebP or ICO images, judged by name and content: no file starting with #!, no package manager config, text
+// UTF-8 with no NUL byte. It refused koalafix 0.2.0 for an SVG logo and 0.2.1 for a clean UTF-8 Cursor rule named
+// .mdc, so Markdown here means .md only. Images are checked by their magic bytes.
+const TEXT_TYPE = /\.(md|txt|json|ya?ml)$|\/(LICENSE|README)$/;
 const IMAGE_MAGIC = { png: "89504e47", jpg: "ffd8ff", jpeg: "ffd8ff", gif: "47494638", webp: "52494646", ico: "00000100" };
 const PACKAGE_CONFIG = /\/(package(-lock)?\.json|pnpm-(workspace|lock)\.yaml|yarn\.lock|\.npmrc|\.yarnrc(\.yml)?|bun\.lockb?)$/;
 const utf8 = new TextDecoder("utf-8", { fatal: true });
