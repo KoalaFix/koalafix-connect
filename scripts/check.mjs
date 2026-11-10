@@ -266,6 +266,16 @@ for (const [where, description] of claudeDescriptions) {
     problems.push(`${where}: the description is ${String(description).length} characters; claude.ai refuses a plugin whose description passes ${CLAUDE_DESCRIPTION_MAX}`);
   }
 }
+// On claude.ai there are no hooks: the skill loads only when its description matches what the person typed, so the
+// description is the trigger. Claude skills cap it at 1,024 characters; one line, so a plain YAML value with no
+// ": " (which would end the value) and no em dash.
+const SKILL_DESCRIPTION_MAX = 1024;
+const skillDescription = /^---\n(?:.*\n)*?description: (.*)\n(?:.*\n)*?---\n/.exec(read(path.join(listed, "skills", "koalafix", "SKILL.md")).replaceAll("\r\n", "\n"))?.[1];
+if (skillDescription === undefined) {
+  problems.push("plugins/koalafix/skills/koalafix/SKILL.md has no one-line description in its frontmatter");
+} else if (skillDescription.length > SKILL_DESCRIPTION_MAX || skillDescription.includes(": ") || skillDescription.includes("—")) {
+  problems.push(`plugins/koalafix/skills/koalafix/SKILL.md: the description must be at most ${SKILL_DESCRIPTION_MAX} characters with no ": " and no em dash (it is ${skillDescription.length} characters)`);
+}
 for (const other of [".codex-plugin", ".cursor-plugin"].map((dir) => path.join(root, "plugins", "koalafix-auto", dir, "plugin.json"))) {
   if (fs.existsSync(other) && read(other).includes("claude-skills")) {
     problems.push(`${rel(other)} names claude-skills: Codex and Cursor list koalafix beside koalafix-auto and would load the skill twice`);
