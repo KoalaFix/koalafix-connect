@@ -15,6 +15,9 @@
 // A `command` hook, not `mcp_tool`: Claude Code skips mcp_tool hooks on SessionStart at launch because MCP
 // servers are not up yet. Budget: 8 s (KALIBRATE_HOOK_BUDGET_MS overrides). Spool: KALIBRATE_HOME or ~/.kalibrate.
 //
+// A koalafix-auto plugin install that connected with the stored browser sign-in, while the plugin's own sensitive
+// option is empty, moves that sign-in into the option once and shows the person one line to restart (option-copy.mjs).
+//
 // Other clients run the same script with `--client <id>` (the output shape: Cursor reads `additional_context`) and
 // `--project <absolute dir>` (the trusted root, in place of CLAUDE_PROJECT_DIR). See client.mjs.
 
@@ -29,6 +32,7 @@ import { keepModel, modelOf, reportedRepo } from "./provenance.mjs";
 import { sessionIdOf, sessionKey } from "./wip.mjs";
 import { installNotice } from "./install-notice.mjs";
 import { sweepQuiet } from "./lease-close.mjs";
+import { RESTART_LINE, copyIntoOption } from "./option-copy.mjs";
 
 const env = process.env;
 const args = parseHookArgs(process.argv.slice(2));
@@ -38,7 +42,12 @@ let output = "";
 let plugin = false;
 let forPerson = null;
 const firstRun = () => (forPerson ??= (plugin ? installNotice(args.client, env) : null) ?? "");
-const startOutput = (text) => sessionStartOutput(args.client, text, firstRun() === "" ? null : forPerson);
+// Set once the stored sign-in went into the plugin option: the person is asked to restart once.
+let restart = "";
+const startOutput = (text) => {
+  const shown = [firstRun(), restart].filter((line) => line !== "").join("\n\n");
+  return sessionStartOutput(args.client, text, shown === "" ? null : shown);
+};
 
 /** The repo the brief puts first; none when git's files cannot be read, which must never cost the brief. */
 function repoOf(root) {
@@ -88,6 +97,11 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.sessionStart), async
   const brief = await fetchBrief(target, deadlineAt, repoOf(found.root));
   if (brief.trim() === "") {
     throw new Error("the server sent an empty brief");
+  }
+  // Local work, after the brief so a slow start never costs it; once a day at most, and only while the option is empty.
+  if (args.user) {
+    const copy = copyIntoOption({ env, client: args.client, located, deadlineAt });
+    restart = copy.copied ? RESTART_LINE : "";
   }
   output = startOutput(buildContext(brief));
   // The server answered: replay what earlier sessions in this project could not send, within what is left of the
