@@ -24,6 +24,7 @@ const hooks = JSON.parse(fs.readFileSync(path.join(plugin, "hooks", "claude-code
 const helper = JSON.parse(fs.readFileSync(path.join(plugin, ".claude-plugin", "plugin.json"), "utf8")).mcpServers.koalafix.headersHelper;
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "koalafix-home-"));
 const NO_NODE = "no Node.js found";
+const UNKNOWN_HOOK = "run.sh was given no known hook";
 const SHORT_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
 const problems = [];
 let runs = 0;
@@ -46,6 +47,10 @@ function run(label, file, args, options, expect) {
   }
   if (stderr.includes(NO_NODE)) {
     wrong.push("run.sh found no Node");
+  }
+  // run.sh exits 0 for a hook name it does not know, so exit 0 alone passed a hook that never ran (3 to 10 Nov 2026).
+  if (stderr.includes(UNKNOWN_HOOK)) {
+    wrong.push("run.sh was given a hook name it does not accept");
   }
   if (expect.stdout !== undefined && !expect.stdout(stdout)) {
     wrong.push(`unexpected stdout ${JSON.stringify(stdout.slice(0, 120))}`);

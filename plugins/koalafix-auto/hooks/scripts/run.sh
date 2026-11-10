@@ -4,7 +4,7 @@
 
 # Starts one KoalaFix hook script with Node, for a client that runs hooks through sh (Claude Code and Codex on macOS
 # and Linux), and Claude Code's MCP headers helper the same way.
-#   sh run.sh <session-start|prompt|stop|session-end|headers> [the script's flags]
+#   sh run.sh <session-start|prompt|pre-tool|stop|session-end|subagent-start|headers> [the script's flags]
 # A desktop app started from the Dock or Finder hands its hooks a short PATH (/usr/bin:/bin:/usr/sbin:/sbin) that
 # misses a Node from Homebrew, nvm, Volta, fnm, asdf or mise, so this also looks in those places. With no Node at
 # all it prints what the client needs to read "no change" and exits 0: a hook never blocks or breaks a session.
@@ -26,7 +26,7 @@ quiet() {
 }
 
 case $hook in
-  session-start | prompt | stop | session-end | headers) ;;
+  session-start | prompt | pre-tool | stop | session-end | subagent-start | headers) ;;
   *)
     echo "koalafix: run.sh was given no known hook" >&2
     quiet "$@"
