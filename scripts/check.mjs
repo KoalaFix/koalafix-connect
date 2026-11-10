@@ -4,7 +4,8 @@
 // The checks this repository runs before a change ships, with no network and no dependencies:
 //   node scripts/check.mjs [<path to a KoalaFix/kalibrate checkout>]
 // 1. Every JSON file parses.
-// 2. The hook files are exactly what scripts/hook-configs.mjs writes, and every script they name exists.
+// 2. The hook files are exactly what scripts/hook-configs.mjs writes, and every script they name exists. Every hook
+//    name they and the headers helper hand run.sh is one run.sh accepts.
 // 3. Every copied hook script matches the sha256 recorded in hooks/scripts/SOURCE. With a kalibrate checkout given,
 //    each copy must also equal the file in git at the commit SOURCE names (`git show <commit>:<path>`), so a hand
 //    edit with a fresh hash in SOURCE still fails, and the checkout's own files must not have moved on since that
@@ -84,6 +85,22 @@ for (const [file, value] of Object.entries(HOOK_FILES)) {
   }
   if (/https?:\/\//.test(body)) {
     problems.push(`${file} names a server; the hook scripts must find it from the person's own credential`);
+  }
+}
+
+// Every hook name a hook file or the headers helper hands run.sh is one run.sh accepts. run.sh exits 0 and prints only
+// a stderr line for a name it does not know, and Claude Code's line `exec`s it, so its node fallback never runs: the
+// edit check and the subagent hook did nothing from 314626a (3 Nov 2026) until this check came in.
+const runSh = read(path.join(scripts, "run.sh"));
+const accepted = runSh.match(/case \$hook in\n\s*([a-z| -]+)\) ;;/)?.[1].split("|").map((name) => name.trim()) ?? [];
+if (accepted.length === 0) {
+  problems.push("plugins/koalafix-auto/hooks/scripts/run.sh: no `case $hook in <names>) ;;` line to read its hook names from");
+}
+for (const [file, body] of [...Object.keys(HOOK_FILES).filter((file) => fs.existsSync(path.join(root, file))).map((file) => [file, read(path.join(root, file))]), ["the headers helper", HEADERS_HELPER]]) {
+  for (const [, name] of body.matchAll(/run\.sh\\?"? ([a-z-]+)/g)) {
+    if (!accepted.includes(name)) {
+      problems.push(`${file} starts run.sh with ${name}, which run.sh does not accept (it takes ${accepted.join(", ")})`);
+    }
   }
 }
 
