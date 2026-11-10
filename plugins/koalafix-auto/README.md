@@ -50,6 +50,13 @@ with the hooks, it happens on every session:
   same sign-in, from the next session (or now, after Reconnect on `koalafix` in `/mcp`): this plugin carries its own
   copy of the `koalafix` server, which Claude Code connects in place of the `koalafix` plugin's when this plugin is
   listed first in your settings, as installing it does. See [Sign in](../../README.md#sign-in).
+- **Your sign-in lives in the plugin's own setting (Claude Code, from 0.5.12):** the plugin declares one option,
+  **KoalaFix sign-in**, marked sensitive, so Claude Code keeps it in its own secure store and shows it in no
+  settings file. Leave it empty. At session start, once you are signed in, the hooks move the sign-in into it with
+  `claude plugin configure` (the token goes on that command's input, never its command line) and show you one line:
+  restart Claude Code once. Nothing else changes, and you do not sign in again. If that cannot run (no Claude Code
+  program in its usual install places), everything keeps working on the sign-in already saved and it tries again a
+  day later. A later version reads the sign-in from this option only.
 
 ## Install
 
@@ -75,8 +82,8 @@ this repository as a team marketplace.
   starts them with no shell between; Codex on macOS and Linux goes through `hooks/scripts/run.sh`, which only finds
   Node and starts the script. Without Node the hooks do nothing for KoalaFix (a client may show a one-line hook
   error).
-- They read your own KoalaFix credential from `~/.kalibrate/credentials.json` and send it only to the exact server it
-  was issued for. They send that server your prompt's text for the recall (up to 2,000 characters, anything shaped
+- They read your own KoalaFix credential from the plugin's **KoalaFix sign-in** option (in Claude Code), else from
+  `~/.kalibrate/credentials.json`, and send it only to the exact server it was issued for. They send that server your prompt's text for the recall (up to 2,000 characters, anything shaped
   like a token or key taken out, marked so the server keeps no log of it); with it, the paths of up to 20 files the
   prompt is about (paths it names that exist in the project, and files this session's agent edited, read from the end
   of your client's own transcript on your machine: only the paths leave it), which go on your work-in-progress lease
@@ -92,7 +99,12 @@ this repository as a team marketplace.
 - In Claude Code, one more script, `hooks/scripts/headers.mjs --user`, is the `headersHelper` of this
   plugin's copy of the `koalafix` server. Claude Code runs it each time it connects that server. It reads no project
   file and prints an Authorization header with your credential only for exactly the server Claude Code is connecting
-  to, over https; with none, it prints `{}` and Claude Code's own OAuth sign-in takes over.
+  to, over https; with none, it prints `{}` and Claude Code's own OAuth sign-in takes over. Claude Code hands this
+  helper no plugin option, so in 0.5.12 it still reads the saved file; a later version drops the helper.
+- In Claude Code, once per machine (and again a day later if it did not take), session start runs
+  `claude plugin configure koalafix-auto@<marketplace> --values-stdin` to copy that saved sign-in into the plugin's
+  option. It only runs a Claude Code program from its usual install places in your home folder (the Claude desktop
+  app's copy, `~/.local/bin`, and Homebrew's on macOS), never one found through PATH or an environment variable.
 - Claude Code starts the hooks and that helper through `hooks/scripts/run.sh` wherever it has a POSIX shell (macOS,
   Linux, Git Bash on Windows). run.sh finds Node from Homebrew, nvm, Volta, fnm, asdf or mise even when an app opened
   from the Dock hands it macOS's short PATH; with no Node at all it does nothing and exits 0. In PowerShell (Windows

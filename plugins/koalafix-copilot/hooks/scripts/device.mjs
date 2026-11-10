@@ -13,7 +13,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { HttpStatusError, messageOf } from "./connect.mjs";
-import { credentialsPath, originOf } from "./credentials.mjs";
+import { DEFAULT_SERVER_URL, credentialsPath, originOf, signInServer } from "./credentials.mjs";
 import { assertOnline, markOffline, markOnline, originKey } from "./offline.mjs";
 import { apiBase } from "./project.mjs";
 import { kalibrateHome } from "./spool.mjs";
@@ -24,7 +24,8 @@ import { kalibrateHome } from "./spool.mjs";
  */
 export { NoCredentialError } from "./credentials.mjs";
 
-export const DEFAULT_SERVER_URL = "https://mcp.koalafix.com";
+// The hosted server and the sign-in server rule moved to credentials.mjs, where the plugin option needs them too.
+export { DEFAULT_SERVER_URL, signInServer };
 
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -48,22 +49,6 @@ function writePrivate(file, value) {
   const temp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
   fs.renameSync(temp, file);
-}
-
-const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
-
-/**
- * The server a first sign-in goes to: the hosted server, or KALIBRATE_SERVER_URL when it names this machine (a local
- * test server). Any other override is ignored: a project can set environment variables for its sessions, and the
- * sign-in saves its server as the person's default, so a planted URL would get every later prompt. Another server
- * signs in with `koalafix login`, where the person types it.
- */
-export function signInServer(env = process.env) {
-  const given = env.KALIBRATE_SERVER_URL;
-  if (typeof given !== "string" || originOf(given) === null) {
-    return DEFAULT_SERVER_URL;
-  }
-  return LOOPBACK.has(new URL(given).hostname) || originOf(given) === originOf(DEFAULT_SERVER_URL) ? given : DEFAULT_SERVER_URL;
 }
 
 /** Saves a token as `koalafix login` does: for its origin, as the default, keeping other servers' entries. */
