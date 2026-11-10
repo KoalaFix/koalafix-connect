@@ -18,7 +18,7 @@
 
 import path from "node:path";
 import { folderPath } from "./client.mjs";
-import { MAX_PATHS, MAX_PATH_CHARS, WARN_MODE_NOTE, gateOutput, realPath, relativeTo } from "./gate.mjs";
+import { MAX_PATHS, MAX_PATH_CHARS, gateOutput, gateText, realPath, relativeTo } from "./gate.mjs";
 
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -220,11 +220,6 @@ export function gateCall(client, input, platform = process.platform) {
   return claudeCall(name, toolInput);
 }
 
-/** The message an answer shows the agent: the server's, with the warn-mode note after a block that did not stop it. */
-function shownMessage(answer, mode) {
-  return answer.decision === "block" && mode !== "block" ? `${answer.message} ${WARN_MODE_NOTE}` : answer.message;
-}
-
 /**
  * What a client's pre-tool hook prints for a gate answer ("" for nothing; the caller prints the client's quiet output
  * then). A block in block mode denies the call with the server's message where the model reads it; a warn, or a block in
@@ -243,7 +238,7 @@ export function gateOutputFor(client, answer, mode) {
     return "";
   }
   const deny = answer.decision === "block" && mode === "block";
-  const message = shownMessage(answer, mode);
+  const message = gateText(answer, mode);
   if (client === "claude-code" || client === "codex") {
     return gateOutput(answer, mode);
   }

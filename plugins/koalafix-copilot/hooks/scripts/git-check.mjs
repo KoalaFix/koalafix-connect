@@ -8,6 +8,7 @@
 
 import { execFile } from "node:child_process";
 import { MAX_PATHS, MAX_PATH_CHARS, inScope, normalisePath } from "./gate.mjs";
+import { framed } from "./memory-frame.mjs";
 
 /**
  * KoalaFix's share of a commit, in ms: finding the server and every gate ask, the part that hangs when KoalaFix is
@@ -257,12 +258,15 @@ export function warning(kind, result, blocking) {
     lines.push(`koalafix: check in so your team sees it: have your agent call work(action: "start", what: "<the task>", paths: [<these files or folders>]).`);
     lines.push(blocking ? `koalafix: the ${act} was stopped (KALIBRATE_GIT_GATE=block). Check in, or run it again with KALIBRATE_GIT_GATE=warn.` : `koalafix: this is a warning; the ${act} went ahead.`);
   }
-  for (const work of result.overlaps) {
-    lines.push(`koalafix: a teammate is on these paths too: ${plain(nameOf(work))} on "${plain(work.what ?? "")}" [lease ${plain(work.lease)}].`);
+  // A teammate's name and work title are text they wrote: inside the team-memory frame, defused (KFIX-753).
+  const mates = result.overlaps.map((work) => `${JSON.stringify(plain(nameOf(work)))} on ${JSON.stringify(plain(work.what ?? ""))} [lease ${plain(work.lease)}]`);
+  if (mates.length > 0) {
+    lines.push(`koalafix: ${mates.length === 1 ? "a teammate is" : `${mates.length} teammates are`} on these paths too:`);
   }
+  const after = [];
   const unchecked = result.unchecked.length + (result.dropped ?? 0);
   if (unchecked > 0) {
-    lines.push(`koalafix: ${unchecked} more changed file${unchecked === 1 ? "" : "s"} went unchecked (too many, or too long a path, to check in time).`);
+    after.push(`koalafix: ${unchecked} more changed file${unchecked === 1 ? "" : "s"} went unchecked (too many, or too long a path, to check in time).`);
   }
-  return lines.length === 0 ? "" : `${lines.join("\n")}\n`;
+  return lines.length + after.length === 0 ? "" : `${framed(lines, mates, after)}\n`;
 }
