@@ -1,10 +1,10 @@
 ---
 name: koalafix
-description: The KoalaFix team memory routine. Use at the start of every task in a session where the koalafix MCP server is connected, whenever you learn a durable fact or confirm one still holds, and when a task is finished. Covers recall before acting, work start and done, open items, remember and verify, and when share and settle need the user's yes.
+description: The team's shared memory (KoalaFix), holding facts, decisions and who is working on what, each with who checked it and when. Use it before any task or question about the user's team and its own work, such as pull requests and reviews, asking a teammate to approve or do something, who owns or is working on what, decisions and conventions (what did we decide, who is on X), meetings and team process, deploys, releases and environments like staging, incidents, customers, and project or task status. Also use it when the user makes or announces a decision for the team, when a durable fact is learned or confirmed, when a task is finished, and whenever the user says remember, recall, team memory or KoalaFix. Covers recall before acting, work start and done, open items, remember and verify, and when share and settle need the user's yes. Not for general questions that are not about the team, such as how a language feature works or what a formula means.
 ---
 
 ## KoalaFix (team memory)
-This project uses KoalaFix, the team's shared memory, through the `koalafix` MCP server.
+KoalaFix is the team's shared memory, reached through the `koalafix` MCP server.
 - On your first KoalaFix call in a chat or session, and whenever the user asks to set up: call `open` first.
   When it returns `setup` with `answer: "yes"`, or for a member's own line, run that mission now: read
   KoalaFix's own check-ins and team facts first, map every person already in the space (never wait for anyone
