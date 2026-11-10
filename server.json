@@ -3,8 +3,12 @@
   "name": "com.koalafix/koalafix",
   "title": "KoalaFix",
   "description": "One memory for every AI tool on your team. Facts show who checked them and when.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "websiteUrl": "https://koalafix.com",
+  "repository": {
+    "url": "https://github.com/KoalaFix/koalafix-connect",
+    "source": "github"
+  },
   "icons": [
     {
       "src": "https://mcp.koalafix.com/favicon.svg",
