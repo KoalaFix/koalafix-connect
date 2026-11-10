@@ -34,7 +34,7 @@ export const RESTART_LINE =
 export const RETRY_MS = 24 * 60 * 60 * 1000;
 
 /** Under this much budget left, the step does not start: `claude` takes a second or two to start. */
-const MIN_BUDGET_MS = 2500;
+const MIN_BUDGET_MS = 3000;
 
 const NAME = /^[A-Za-z0-9._-]+$/;
 
@@ -77,6 +77,41 @@ export function pluginIdOf(root) {
     if (parts[index] === "cache" && parts[index - 1] === "plugins") {
       const [marketplace, plugin] = [parts[index + 1], parts[index + 2]];
       return NAME.test(marketplace) && NAME.test(plugin) ? `${plugin}@${marketplace}` : null;
+    }
+  }
+  return null;
+}
+
+/** A folder as one comparable string: resolved, forward slashes, and on Windows in one case. */
+function sameFolder(folder, platform) {
+  const resolved = path.resolve(folder).replaceAll("\\", "/").replace(/\/+$/, "");
+  return platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+/**
+ * The plugin id from `claude plugin list --json`: the installed plugin whose folder is `root`. Claude Code runs a
+ * plugin from a marketplace on a local folder in place, outside its cache, so the path alone cannot name it.
+ * @param {string} binary
+ * @param {string} root
+ * @param {{ run: typeof spawnSync, env: Record<string, string | undefined>, timeout: number, platform: string }} how
+ */
+export function listedPluginId(binary, root, { run, env, timeout, platform }) {
+  const result = run(binary, ["plugin", "list", "--json"], { encoding: "utf8", timeout, windowsHide: true, env });
+  if (result.error !== undefined || result.status !== 0) {
+    return null;
+  }
+  let listed = [];
+  try {
+    const parsed = JSON.parse(String(result.stdout));
+    listed = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return null;
+  }
+  const want = sameFolder(root, platform);
+  for (const entry of listed) {
+    const folders = [entry?.installPath, entry?.readFromFolder].filter((folder) => typeof folder === "string" && folder !== "");
+    if (typeof entry?.id === "string" && folders.some((folder) => sameFolder(folder, platform) === want)) {
+      return entry.id;
     }
   }
   return null;
@@ -173,13 +208,12 @@ export function copyIntoOption({ env = process.env, client, located, deadlineAt,
     return { copied: false, reason: "the stored sign-in is for another server" };
   }
   const root = env.CLAUDE_PLUGIN_ROOT;
-  const pluginId = pluginIdOf(root);
-  if (pluginId === null || typeof root !== "string" || !declaresOption(root)) {
+  if (typeof root !== "string" || root === "" || !declaresOption(root)) {
     return { copied: false, reason: "this plugin has no such option" };
   }
   const marker = readJson(markerPath(env));
   const last = typeof marker?.at === "string" ? Date.parse(marker.at) : Number.NaN;
-  if (marker?.pluginId === pluginId && Number.isFinite(last) && now - last < RETRY_MS) {
+  if (marker?.root === sameFolder(root, platform) && Number.isFinite(last) && now - last < RETRY_MS) {
     return { copied: false, reason: "tried within the last day" };
   }
   const left = deadlineAt - Date.now();
@@ -192,12 +226,18 @@ export function copyIntoOption({ env = process.env, client, located, deadlineAt,
   }
   let copied = false;
   let reason = "claude plugin configure did not save it";
+  let pluginId = pluginIdOf(root);
   for (const binary of binaries) {
-    const timeout = Math.max(1000, deadlineAt - Date.now() - 300);
+    const timeout = () => Math.max(1000, deadlineAt - Date.now() - 300);
+    pluginId ??= listedPluginId(binary, root, { run, env, timeout: timeout(), platform });
+    if (pluginId === null) {
+      reason = "Claude Code lists no installed plugin in this folder";
+      continue;
+    }
     const result = run(binary, ["plugin", "configure", pluginId, "--values-stdin", "--json"], {
       input: JSON.stringify({ [OPTION_KEY]: located.target.token }),
       encoding: "utf8",
-      timeout,
+      timeout: timeout(),
       windowsHide: true,
       env,
     });
@@ -220,7 +260,7 @@ export function copyIntoOption({ env = process.env, client, located, deadlineAt,
   }
   try {
     fs.mkdirSync(path.dirname(markerPath(env)), { recursive: true, mode: 0o700 });
-    fs.writeFileSync(markerPath(env), `${JSON.stringify({ pluginId, at: new Date(now).toISOString(), copied })}\n`, { mode: 0o600 });
+    fs.writeFileSync(markerPath(env), `${JSON.stringify({ root: sameFolder(root, platform), pluginId, at: new Date(now).toISOString(), copied })}\n`, { mode: 0o600 });
   } catch {
     // without the marker the step runs again next session, which is harmless
   }
