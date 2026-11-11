@@ -137,6 +137,8 @@ export function readState(key, env = process.env) {
       nudged: parsed.nudged === true,
       // A plugin install: whether the lease would land in this folder's space (lease-space.mjs); null: not known yet.
       autoLease: parsed.autoLease === true ? true : parsed.autoLease === null ? null : false,
+      // A plugin install: whether this folder belongs to one of the person's spaces, the recall's gate (KFIX-780).
+      inSpace: parsed.inSpace === true ? true : parsed.inSpace === false ? false : null,
       turns: Number.isInteger(parsed.turns) && parsed.turns >= 0 ? parsed.turns : 0,
       covered: Number.isInteger(parsed.covered) && parsed.covered >= 0 ? parsed.covered : 0,
       capturedAt: Number.isFinite(parsed.capturedAt) ? parsed.capturedAt : null,
