@@ -7,8 +7,10 @@
 //   block in front of the prompt: the verdict, the lease it started, overlapping work, facts, notes and teammates.
 // - The lease is named after the project (label.mjs: repository and branch, or the folder), never after the prompt:
 //   teammates see the lease, and a prompt can be private. A plugin install (`--user`) runs in any folder, so on the
-//   first prompt it reads the person's spaces alongside the recall and starts the lease only when the space the
-//   server would file it in is this folder's space (lease-space.mjs, KOA2-5); the answer holds for the session.
+//   first prompt it reads the person's spaces first, and sends the recall only from a folder that belongs to one of
+//   them (KFIX-780): a prompt typed in a personal or unrelated folder never leaves the machine. It starts the lease
+//   only when the space the server would file it in is this folder's space (lease-space.mjs, KOA2-5). A folder found
+//   in no space is settled for the session; one whose spaces could not be read is read again on the next prompt.
 // - On later prompts it calls `recall` again and adds only what this session has not been shown (wip.mjs). Most
 //   prompts add nothing, so the model does not learn to skip the block.
 // - Caps (KOA2-138): the first block 1,500 characters, a later prompt's news 1,000, the whole session 6,000 (about
@@ -19,8 +21,8 @@
 // - Every call says which repo and model it came from in `_meta` (provenance.mjs, KOA2-149), on the same request.
 // It fails open: on any problem it adds nothing, prints one line on stderr and exits 0. Budget 1.5 s (KALIBRATE_HOOK_BUDGET_MS overrides). Other clients pass `--client` and `--project`.
 // No MCP handshake (KOA2-64): each call is one `tools/call` request, sent alone with the `MCP-Protocol-Version`
-// header, so a later prompt is one HTTP request and the first is two in parallel (a plugin install's first adds its
-// spaces read, beside the recall, before the lease start). A server that wants the handshake
+// header, so a later prompt is one HTTP request and the first is two in parallel (a plugin install's first reads its
+// spaces before both). A server that wants the handshake
 // gets it once, and the hook says so on stderr.
 
 import { BUDGETS, IDEMPOTENCY_META, ToolError, UNLOGGED_META, budgetFrom, callTool, connect, finish, isRecord, messageOf, runWithBudget } from "./connect.mjs";
@@ -31,7 +33,7 @@ import { MAX_NEWS_CHARS, MAX_SESSION_CHARS, SPENT_LINE, firstBlock, isTrivial, l
 import { projectLabel } from "./label.mjs";
 import { fetchSpaces } from "./capture.mjs";
 import { ServerOfflineError } from "./offline.mjs";
-import { autoLeaseSpace } from "./lease-space.mjs";
+import { autoLeaseSpace, folderSpace } from "./lease-space.mjs";
 import { pickedSpace } from "./spaces.mjs";
 import { provenanceMeta } from "./provenance.mjs";
 import { pathsMeta, sessionPaths } from "./paths.mjs";
@@ -106,17 +108,19 @@ function settleBy(promise, until, late) {
 }
 
 /**
- * A plugin install: whether the session's lease would land in this folder's space (lease-space.mjs). True or false
- * once the spaces are read; null when they could not be, so the next prompt reads them again.
+ * A plugin install: whether this folder belongs to one of the person's spaces (`inSpace`, the recall's gate) and
+ * whether the session's lease would land in it (`autoLease`), from lease-space.mjs. Null when the spaces could not be
+ * read, so this prompt sends nothing and the next one reads them again.
  */
-async function leaseAllowed(target, root, deadlineAt) {
+async function readFolder(target, root, deadlineAt) {
   try {
-    return autoLeaseSpace(await fetchSpaces(target, deadlineAt), root, pickedSpace(root, env)) !== null;
+    const page = await fetchSpaces(target, deadlineAt);
+    const picked = pickedSpace(root, env);
+    return { inSpace: folderSpace(page, root, picked) !== null, autoLease: autoLeaseSpace(page, root, picked) !== null };
   } catch (error) {
-    // A server in its cool-off already gets the hook's one "skipped" line; saying it twice is noise.
-    if (!(error instanceof ServerOfflineError)) {
-      notice += `koalafix: prompt hook could not read your spaces, so it started no WIP lease yet: ${messageOf(error)}\n`;
-    }
+    // No recall follows, so the hook's usual "skipped" line for a server in its cool-off never prints: say it here.
+    const why = error instanceof ServerOfflineError ? "the server is offline" : messageOf(error);
+    notice += `koalafix: prompt hook could not read your spaces, so it sent nothing for this prompt: ${why}\n`;
     return null;
   }
 }
@@ -164,7 +168,13 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.prompt), async (dead
   // A project folder `koalafix init` tied to a space always gets an automatic lease, named when one is started; a
   // plugin install gets one when its first prompt found the lease would land in this folder's space.
   const project = found.user !== true;
-  const state = readState(key, env);
+  let state = readState(key, env);
+  // A plugin install whose spaces could not be read has sent nothing yet: its first prompt that can send is its first
+  // (KFIX-780), keeping the turns the stop hook counted.
+  const unsent = state !== null && !project && state.inSpace === null && state.injected === 0 && state.lease === null ? state : null;
+  if (unsent !== null) {
+    state = null;
+  }
   session = connect(target, deadlineAt);
   const about = recallQuery(prompt);
   const reported = provenanceMeta(found.root, input, key, env);
@@ -176,7 +186,7 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.prompt), async (dead
   const projectName = labelProject(label);
   const own = state !== null && leaseLive(state) ? state.lease : null;
   const recallMeta = { [UNLOGGED_META]: true, ...reported, ...pathsMeta(paths, own) };
-  const recall = callTool(session, "recall", { about, limit: RECALL_LIMIT }, recallMeta).then((result) => result.structured ?? null);
+  const recall = () => callTool(session, "recall", { about, limit: RECALL_LIMIT }, recallMeta).then((result) => result.structured ?? null);
   // The lease's calls stop short of the budget. A start still unanswered then is not counted, so the next try sends
   // the same idempotency key and gets the same lease back rather than leaving a second one open.
   const leaseBy = deadlineAt - LEASE_CUTOFF_MS;
@@ -184,24 +194,41 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.prompt), async (dead
   // Where a later session start's sweep finds this session's project and how recently it moved (lease-close.mjs).
   const where = { root: found.root, server: target.url, transcript: typeof input.transcript_path === "string" ? input.transcript_path : null };
   if (state === null) {
-    const allowed = project ? Promise.resolve(true) : leaseAllowed(target, found.root, leaseBy);
-    const [memory, started, autoLease] = await Promise.all([recall, allowed.then((ok) => leaseIf(ok, 1)), allowed]);
+    // A plugin install sends the prompt only from a folder in one of the person's spaces (KFIX-780).
+    const folder = project ? { inSpace: true, autoLease: true } : await readFolder(target, found.root, leaseBy);
+    // Kept even when nothing is sent, so the stop hook counts the session's turns; unknown (null) is asked again.
+    if (folder?.inSpace !== true) {
+      writeState(key, { ...unsent, lease: null, expiresAt: null, leases: 0, shown: [], nudged: false, autoLease: folder?.autoLease ?? null, inSpace: folder?.inSpace ?? null, injected: 0, spent: false, ...where }, env);
+      return;
+    }
+    const [memory, started] = await Promise.all([recall(), leaseIf(project || folder.autoLease, 1)]);
     const work = started === LATE ? null : started;
     const block = firstBlock(memory, work, null, paths, projectName);
     context = block.text;
-    writeState(key, { lease: work?.lease ?? null, expiresAt: work?.expires_at ?? null, leases: started === LATE ? 0 : 1, shown: block.shown, nudged: false, autoLease, injected: context.length, spent: false, ...where }, env);
+    writeState(key, { ...unsent, lease: work?.lease ?? null, expiresAt: work?.expires_at ?? null, leases: started === LATE ? 0 : 1, shown: block.shown, nudged: false, autoLease: folder.autoLease, inSpace: folder.inSpace, injected: context.length, spent: false, ...where }, env);
     return;
   }
-  // A plugin install whose spaces could not be read on the first prompt reads them again, until it knows.
-  const allowed = project || state.autoLease !== null ? Promise.resolve(project || state.autoLease) : leaseAllowed(target, found.root, leaseBy);
+  // A folder found in no space stays quiet for the session; one whose spaces could not be read yet, or a state an
+  // older hook wrote, reads them again.
+  if (!project && state.inSpace !== true) {
+    const folder = state.inSpace === false ? null : await readFolder(target, found.root, leaseBy);
+    if (folder?.inSpace === false) {
+      writeState(key, { ...state, autoLease: false, inSpace: false }, env);
+    }
+    if (folder?.inSpace !== true) {
+      return;
+    }
+    state = { ...state, autoLease: folder.autoLease, inSpace: true };
+  }
+  const allowed = Promise.resolve(project || state.autoLease === true);
   const restart = allowed.then((ok) => (leaseLive(state) ? null : leaseIf(ok, state.leases + 1)));
   // The lease past its end time was extended by every call since, so it is still open: closed beside the next start.
   const replaced = leaseLive(state) ? false : allowed.then((ok) => ok === true && closeReplaced(session, found.root, target.url, key, state, reported, leaseBy, env));
   // A failed recall still waits for the close (it never throws), so a close the server did not confirm reaches the spool.
-  const [memory, started, autoLease] = await Promise.all([recall, restart, allowed]).finally(() => replaced);
+  const [memory, started] = await Promise.all([recall(), restart]).finally(() => replaced);
   const closed = await replaced;
   const work = started === LATE ? null : started;
-  const known = { ...state, ...where, ...(closed ? { lease: null, expiresAt: null } : {}), autoLease: project ? state.autoLease : autoLease };
+  const known = { ...state, ...where, ...(closed ? { lease: null, expiresAt: null } : {}) };
   const next = work === null ? known : { ...known, lease: work.lease ?? null, expiresAt: work.expires_at ?? null, leases: state.leases + 1 };
   const restarted = work === null ? null : restartedLine(work);
   // The session's budget (KOA2-138): news fits in what is left of it after a restarted lease's line, collisions go out

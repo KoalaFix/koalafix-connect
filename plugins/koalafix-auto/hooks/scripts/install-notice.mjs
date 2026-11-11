@@ -30,9 +30,11 @@ export function noticeText(client) {
   return [
     "KoalaFix hooks are on (shown once).",
     "At session start they load your team's brief.",
-    "On each prompt they send the prompt (keys and tokens taken out, never logged) and the paths of files it names or this session edits to your KoalaFix server,",
-    "and teammates see this project's name, branch and those paths while you work.",
-    "Some turns end with the agent saving the session's decisions to the team.",
+    "On each prompt in a folder that belongs to one of your team's spaces (a project you set up with koalafix init, one named after a space, or any repository when you are in only one space),",
+    "they send the prompt (keys and tokens taken out, never logged) and the paths of files it names or this session edits to your KoalaFix server.",
+    "From any other folder they send no prompt.",
+    "In a team folder, teammates see this project's name, branch and those paths while you work.",
+    "Some turns end with the agent saving the session's decisions to the team, in its own words, after asking you which space when the folder has none.",
     off,
   ].join(" ");
 }
