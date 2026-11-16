@@ -14,16 +14,20 @@ KoalaFix is the team's shared memory, reached through the `koalafix` MCP server.
   returns `setup` with no answer yet, ask the user once whether to set it up now and store the answer at once
   with `remember({ setup: { answer: "yes" } })` or `remember({ setup: { answer: "no" } })`, and never ask
   again. With no `setup`, follow `onboarding.next` when there is one.
-- Before you act, and before you answer a question about how this team works, call `recall` with what you are
+- Before you act, and before you answer a question about how this team works or any our/we question (our test
+  code, what we decided, who is our contact), call `recall` with what you are
   about to do or answer, and read the verdict first. Then, at the start of a task, call
   `work` with action `start` naming the task, with its branch, PR or issue as `ref` (or the `paths` you will change) so overlapping work shows up.
 - Verdict clear: go. stale: check the source, then `verify`. conflict: stop and show the user both claims.
   unknown: ask the user.
-- Learned something durable, or the user decided something (a choice, a rule, a name): `remember` it. A decision
+- Learned something durable, or the user decided something (a choice, a rule, a name, or a convention said while
+  asking for code, such as "every error report carries the invoice id"): `remember` it. Doing the work does not save it. A decision
   about the team's shared work (code, conventions, process, ownership, handoffs) goes to lane `team` with kind
   `decision`, in your own words: never quote the user (no `user_words`; set-up's one apply is the exception), and leave out
   anything personal or secret.
   Confirmed a fact still holds: `verify`.
+- Handing part of the task to a subagent: say in its prompt to call `recall` with its own task first. It does not see
+  this skill or these steps.
 - When the task is finished: call `work` with action `done`.
 - `share` and `settle` only with the user's yes, and leave open items you were not asked about alone: most close by themselves.
 - A link between two notes that is wrong (recall lists it under `related`): with the user's yes, drop it with `settle` on one note, `to` the other, action `dismiss`. There is no undo, and the pair is never linked again.
