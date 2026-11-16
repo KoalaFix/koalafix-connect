@@ -10,7 +10,7 @@
 // Windows: each hook line through Git Bash and through Windows PowerShell (Claude Code's two hook shells), and the
 // helper through cmd.exe (the shell Claude Code runs a headersHelper in), with sh on PATH and with it taken away.
 // The person's home is an empty folder, so the scripts find no credential: session-start prints its first-run
-// message, headers.mjs prints {}, and the others print nothing.
+// message, headers.mjs prints {} (or a pending sign-in code), and the others print nothing.
 
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -31,6 +31,9 @@ let runs = 0;
 
 /** Claude Code fills in ${CLAUDE_PLUGIN_ROOT} before any shell sees the line. */
 const fill = (line) => line.replaceAll("${CLAUDE_PLUGIN_ROOT}", plugin);
+
+// Signed out, headers.mjs prints {} or, once a browser sign-in is pending, only that code (kalibrate PR 1092).
+const signedOutHeaders = (out) => out === "{}" || /^\{"X-KoalaFix-Device":"[0-9a-f]{64}"\}$/.test(out);
 
 function env(extra = {}) {
   return { ...process.env, HOME: home, USERPROFILE: home, CLAUDE_PLUGIN_ROOT: plugin, KALIBRATE_SERVER_URL: "", CLAUDE_CODE_MCP_SERVER_URL: "https://mcp.koalafix.com/mcp", ...extra };
@@ -82,7 +85,7 @@ if (process.platform === "darwin" || process.platform === "linux") {
   for (const { event, command } of lines) {
     run(`${event} via /bin/sh, PATH=${SHORT_PATH}`, "/bin/sh", ["-c", command], { input: input(event), env: env({ PATH: SHORT_PATH }) }, expectFor(event));
   }
-  run(`headersHelper via /bin/sh, PATH=${SHORT_PATH}`, "/bin/sh", ["-c", fill(helper)], { input: "", env: env({ PATH: SHORT_PATH }) }, { stdout: (out) => out === "{}" });
+  run(`headersHelper via /bin/sh, PATH=${SHORT_PATH}`, "/bin/sh", ["-c", fill(helper)], { input: "", env: env({ PATH: SHORT_PATH }) }, { stdout: signedOutHeaders });
   // The control: the old exec form, `node` looked up on the short PATH, must not be found, or this check proves nothing.
   if (process.platform === "darwin") {
     const control = spawnSync("node", ["--version"], { env: env({ PATH: SHORT_PATH }), encoding: "utf8" });
@@ -99,7 +102,7 @@ if (process.platform === "darwin" || process.platform === "linux") {
   }
   const withoutSh = (process.env.PATH ?? "").split(";").filter((dir) => dir !== "" && !fs.existsSync(path.join(dir, "sh.exe"))).join(";");
   for (const [label, PATH] of [["sh on PATH", process.env.PATH ?? ""], ["no sh on PATH", withoutSh]]) {
-    run(`headersHelper via cmd.exe, ${label}`, process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", `"${fill(helper)}"`], { input: "", env: env({ PATH }), windowsVerbatimArguments: true }, { stdout: (out) => out === "{}" });
+    run(`headersHelper via cmd.exe, ${label}`, process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", `"${fill(helper)}"`], { input: "", env: env({ PATH }), windowsVerbatimArguments: true }, { stdout: signedOutHeaders });
   }
 } else {
   problems.push(`no check for ${process.platform}`);
