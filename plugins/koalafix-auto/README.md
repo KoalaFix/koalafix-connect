@@ -47,7 +47,7 @@ with the hooks, it happens on every session:
   `KALIBRATE_CAPTURE_AT_END=off` turns it off.
 - **First use:** with no KoalaFix credential on the machine, the agent shows you a sign-in link and a code. Approve
   it once in the browser and the hooks turn on by themselves. In Claude Code the KoalaFix tools use the
-  same sign-in, from the next session (or now, after Reconnect on `koalafix` in `/mcp`): this plugin carries its own
+  same sign-in and turn on in the same session, with nothing to do in `/mcp`: this plugin carries its own
   copy of the `koalafix` server, which Claude Code connects in place of the `koalafix` plugin's when this plugin is
   listed first in your settings, as installing it does. See [Sign in](../../README.md#sign-in).
 
