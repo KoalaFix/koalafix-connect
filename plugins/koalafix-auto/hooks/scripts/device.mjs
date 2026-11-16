@@ -121,9 +121,19 @@ async function post(url, body, deadlineAt, fetchFn) {
 function showText(pending, client) {
   const after =
     client === "claude-code"
-      ? "Team memory turns on by itself once they approve. The KoalaFix tools connected before the approval, so they pick it up in the next session, or now once the user reconnects koalafix in /mcp."
+      ? "Team memory turns on by itself once they approve. The KoalaFix tools connected before the approval, so they pick it up in the next session, or now once the user reconnects koalafix in /mcp (Reconnect, not Authenticate: that would be a second sign-in)."
       : "Once they approve, the hooks turn on by themselves; the KoalaFix tools have their own sign-in the first time they are used.";
   return `KoalaFix team memory is installed but not signed in on this machine. Show the user this link and code, and ask them to approve it: ${pending.uri} (code ${pending.userCode}). ${after}`;
+}
+
+/**
+ * The one line the person sees for a pending sign-in (the hook's `systemMessage`): the model's text reaches only the
+ * model, which says nothing until the person types, so a person who opened /mcp first never saw the link and signed
+ * in a second time through Claude Code's own sign-in (rev 25 walk, 16 Nov 2026).
+ */
+export function personLine(pending, client) {
+  const then = client === "claude-code" ? " Then, in /mcp, Reconnect koalafix (not Authenticate)." : "";
+  return `KoalaFix: sign in once at ${pending.uri} (code ${pending.userCode}).${then}`;
 }
 
 /**
@@ -143,7 +153,7 @@ export async function signInStep({ env = process.env, client, deadlineAt, start,
       return { signedIn: true, text: null };
     }
     if (polled.status === 428 || polled.body.error === "authorization_pending") {
-      return { signedIn: false, text: start ? showText(pending, client) : null };
+      return { signedIn: false, text: start ? showText(pending, client) : null, person: start ? personLine(pending, client) : null };
     }
     fs.rmSync(file, { force: true });
   }
@@ -169,5 +179,5 @@ export async function signInStep({ env = process.env, client, deadlineAt, start,
     expiresAt: new Date(Date.now() + (typeof body.expires_in === "number" ? body.expires_in : 600) * 1000).toISOString(),
   };
   writePrivate(file, next);
-  return { signedIn: false, text: showText(next, client) };
+  return { signedIn: false, text: showText(next, client), person: personLine(next, client) };
 }

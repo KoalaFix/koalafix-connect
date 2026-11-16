@@ -58,7 +58,7 @@ function off(value) {
 
 /** Whether the session that just ended is owed a last pass: turns not covered, capturing on, not a logout. */
 export function endPassDue(state, env, input) {
-  if (state === null || state.turns <= state.covered || !capturing(env) || off(env.KALIBRATE_CAPTURE_AT_END)) {
+  if (state === null || (state.turns <= state.covered && typeof state.captureDue !== "string") || !capturing(env) || off(env.KALIBRATE_CAPTURE_AT_END)) {
     return false;
   }
   return !(typeof input === "object" && input !== null && input.reason === "logout");

@@ -149,6 +149,8 @@ export function readState(key, env = process.env) {
       // The characters the prompt hook has injected this session, and whether the spent line went out (KOA2-138).
       injected: Number.isInteger(parsed.injected) && parsed.injected >= 0 ? parsed.injected : 0,
       spent: parsed.spent === true,
+      // A decision capture the Stop hook left for the next prompt to deliver (capture-due.mjs), else null.
+      captureDue: typeof parsed.captureDue === "string" ? parsed.captureDue : null,
       // The session's project folder, server (MCP url) and transcript, for a later session start's sweep (KOA2-531).
       root: typeof parsed.root === "string" && path.isAbsolute(parsed.root) ? parsed.root : null,
       server: typeof parsed.server === "string" && /^https?:\/\//.test(parsed.server) ? parsed.server : null,

@@ -217,11 +217,11 @@ export function captureDue(state, now, every) {
   return since > 0 && (since >= every.turns || now - state.capturedAt >= every.minutes * 60_000);
 }
 
-const WHAT = "save each decision this session made about the team's shared work (code, conventions, process, ownership, handoffs), so teammates' assistants know it";
+export const WHAT = "save each decision this session made about the team's shared work (code, conventions, process, ownership, handoffs), so teammates' assistants know it";
 // KFIX-771 (the KFIX-770 audit): a changed decision goes under the key that held the old state, so recall never serves
 // the old value as clear beside a keyless note; and the no-duplicates rule names the edit route, so a correction is an
 // edit, not a second note that contradicts the first.
-const RULES = [
+export const RULES = [
   "Write each one in your own words: one or two sentences on what was decided and why.",
   "Never quote the person's messages or copy any prompt text, and do not set user_words.",
   "Leave out anything personal (health, HR, pay, private life) and any secret, token or credential.",
