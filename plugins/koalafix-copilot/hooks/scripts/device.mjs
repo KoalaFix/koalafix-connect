@@ -115,13 +115,13 @@ async function post(url, body, deadlineAt, fetchFn) {
 
 /**
  * What the model shows the person for a pending sign-in. In Claude Code the koalafix-auto plugin's copy of the server
- * sends this same sign-in (headers.mjs --user), but it connected at session start, before the approval, so it picks
- * the sign-in up when it next connects. Other clients sign their KoalaFix tools in on their own.
+ * connects with the pending code (headers.mjs --user), and the server serves it once the person approves, in the same
+ * session (kalibrate PR 1092). Other clients sign their KoalaFix tools in on their own.
  */
 function showText(pending, client) {
   const after =
     client === "claude-code"
-      ? "Team memory turns on by itself once they approve. The KoalaFix tools connected before the approval, so they pick it up in the next session, or now once the user reconnects koalafix in /mcp (Reconnect, not Authenticate: that would be a second sign-in)."
+      ? "Team memory and the KoalaFix tools turn on by themselves once they approve, in this session; nothing in /mcp is needed (Authenticate there would be a second sign-in)."
       : "Once they approve, the hooks turn on by themselves; the KoalaFix tools have their own sign-in the first time they are used.";
   return `KoalaFix team memory is installed but not signed in on this machine. Show the user this link and code, and ask them to approve it: ${pending.uri} (code ${pending.userCode}). ${after}`;
 }
@@ -131,9 +131,8 @@ function showText(pending, client) {
  * model, which says nothing until the person types, so a person who opened /mcp first never saw the link and signed
  * in a second time through Claude Code's own sign-in (rev 25 walk, 16 Nov 2026).
  */
-export function personLine(pending, client) {
-  const then = client === "claude-code" ? " Then, in /mcp, Reconnect koalafix (not Authenticate)." : "";
-  return `KoalaFix: sign in once at ${pending.uri} (code ${pending.userCode}).${then}`;
+export function personLine(pending) {
+  return `KoalaFix: sign in once at ${pending.uri} (code ${pending.userCode}).`;
 }
 
 /**
@@ -152,7 +151,7 @@ export async function signInStep({ env = process.env, client, deadlineAt, start,
       return { signedIn: true, text: null };
     }
     if (polled.status === 428 || polled.body.error === "authorization_pending") {
-      return { signedIn: false, text: start ? showText(pending, client) : null, person: start ? personLine(pending, client) : null };
+      return { signedIn: false, text: start ? showText(pending, client) : null, person: start ? personLine(pending) : null };
     }
     fs.rmSync(file, { force: true });
   }
@@ -163,7 +162,7 @@ export async function signInStep({ env = process.env, client, deadlineAt, start,
   if (next === null) {
     return { signedIn: false, text: "KoalaFix team memory is installed but not signed in on this machine, and the server has no browser sign-in yet. Tell the user to run: koalafix login --token <a token from the KoalaFix dashboard>." };
   }
-  return { signedIn: false, text: showText(next, client), person: personLine(next, client) };
+  return { signedIn: false, text: showText(next, client), person: personLine(next) };
 }
 
 /** Whether a device-pending.json entry is a code still waiting for its approval. */
