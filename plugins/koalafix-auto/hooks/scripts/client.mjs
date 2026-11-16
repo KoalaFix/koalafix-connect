@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { NoCredentialError, userServer } from "./credentials.mjs";
 import { findConfig, hasProjectInstall, resolveTarget, trustedRoot, userFound } from "./project.mjs";
+import { TokenPinError } from "./token-pin.mjs";
 
 /** The clients a hook can speak for. `claude-code` is the default. */
 export const CLIENTS = ["claude-code", "codex", "cursor", "gemini-cli", "opencode", "copilot"];
@@ -149,14 +150,21 @@ export function canShowBrowser(env = process.env, platform = process.platform) {
  * no sign-in and no network. With a browser, a plugin install throws NoCredentialError (the hook may sign in,
  * device.mjs) and a project install throws a plain error the hook reports on stderr.
  * Throws when a project install is broken (no config, no serverUrl, a refused link): the hook reports it on stderr.
+ * A project whose `serverUrl` is no longer the server its token was issued for (token-pin.mjs) is null too, with or
+ * without a browser: the token is not sent and nothing is called, and `notify` gets the one line that says why.
  * @param {{ client: string, project: string | null, user?: boolean }} args
  * @param {Record<string, unknown>} [input] the hook's stdin
  * @param {string} [platform]
+ * @param {(line: string) => void} [notify] where that line goes: the hook's stderr
  */
-export function locateHook(args, env = process.env, input = {}, platform = process.platform) {
+export function locateHook(args, env = process.env, input = {}, platform = process.platform, notify = (line) => process.stderr.write(`${line}\n`)) {
   try {
     return locate(args, env, input);
   } catch (error) {
+    if (error instanceof TokenPinError) {
+      notify(error.message);
+      return null;
+    }
     if (!(error instanceof NoCredentialError)) {
       throw error;
     }

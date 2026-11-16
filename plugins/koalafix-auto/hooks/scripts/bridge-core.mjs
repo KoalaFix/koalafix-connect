@@ -27,7 +27,8 @@ export const UNAUTHORIZED_CODE = -32001;
 
 /**
  * The server and credential for a project folder: its `.kalibrate/config.json` must name the server, and a token must
- * exist for exactly that server. Throws with the fix in words otherwise.
+ * exist for exactly that server. Throws with the fix in words otherwise, and with TokenPinError (token-pin.mjs) when
+ * the config names another server than the one the project's token was issued for: the bridge then sends nothing.
  * @param {string} root the absolute project folder
  */
 export function resolveBridgeTarget(root, env = process.env) {

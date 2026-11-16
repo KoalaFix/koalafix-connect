@@ -15,8 +15,12 @@
 // any problem (no credential, no network, a timeout, an HTTP error, a cool-off, bad JSON) it prints nothing on stdout,
 // one line on stderr starting `koalafix: gate`, and exits 0. Budget 1 s (KALIBRATE_HOOK_BUDGET_MS overrides).
 // The space is the one the person picked for this folder (spaces.mjs, a local file); none is sent when there is no pick.
+// In warn mode, when the only open work is the hook's own lease with no paths, it names the paths for it (rescope.mjs).
 
-import { budgetFrom, finish, messageOf, readApi, runWithBudget } from "./connect.mjs";
+import { budgetFrom, connect, finish, messageOf, readApi, runWithBudget } from "./connect.mjs";
+import { projectLabel } from "./label.mjs";
+import { provenanceMeta } from "./provenance.mjs";
+import { rescope, rescopedOutput, shouldRescope } from "./rescope.mjs";
 import { readHookInput } from "./project.mjs";
 import { locateHook, parseHookArgs, quietOutput } from "./client.mjs";
 import { GATE_BUDGET_MS, MAX_PATHS, allInScope, alreadyShown, blockedAtFor, emptyGate, gateBudget, gateMode, gateRepo, gateRoute, nextGate, readAnswer, readGate, repoRoot, writeGate } from "./gate.mjs";
@@ -82,13 +86,21 @@ if (mode !== "off") {
     if (answer === null) {
       throw new Error("GET /api/v1/gate answered something that is not a gate answer");
     }
-    if (!alreadyShown(state, answer, mode)) {
+    // The hook's own lease names no files: name these for it instead of telling the agent to (rescope.mjs).
+    const wip = key === null ? null : readState(key, env);
+    const rescoped = key !== null && shouldRescope(answer, wip, mode)
+      ? await rescope({ session: connect(target, deadlineAt), key, state: wip, what: projectLabel(found.root), client: args.client, reported: provenanceMeta(found.root, input, key, env), paths, project: found.root, server: target.url, until: deadlineAt, env })
+      : null;
+    const shown = rescoped === null ? answer : { ...answer, decision: "allow", reason: "covered", scope: paths };
+    if (rescoped !== null) {
+      stdout = rescopedOutput(args.client, rescoped, paths);
+    } else if (!alreadyShown(state, answer, mode)) {
       stdout = gateOutputFor(args.client, answer, mode);
     }
     // An answer that came after the budget ran out was never shown, so it must not mark anything shown.
     if (key !== null && Date.now() < deadlineAt) {
       try {
-        writeGate(key, nextGate(state, answer, paths, mode), env);
+        writeGate(key, nextGate(state, shown, paths, mode), env);
       } catch (error) {
         notice += `koalafix: gate could not keep its session cache: ${messageOf(error)}\n`;
       }

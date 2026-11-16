@@ -8,6 +8,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { framed } from "./memory-frame.mjs";
 import { reportedRepo } from "./provenance.mjs";
 import { kalibrateHome } from "./spool.mjs";
 
@@ -205,9 +206,55 @@ export function readAnswer(body) {
   return body;
 }
 
+/** The clause a server before KFIX-753 put in its message, with each teammate's lease text in it raw. */
+const OLD_TEAMMATES = " Teammates already on these paths: ";
+/** What a warn from such a server said after that clause, KoalaFix's own words. */
+const OLD_WARN_TAIL = ' Check with them before you change it, or hand off with work(action: "handoff").';
+
 /**
- * What to print for Claude Code. A block in block mode denies the edit with the answer's message. A warn, or a block
- * in warn mode, adds the message as context in front of the edit and leaves the permission flow alone: this never
+ * KoalaFix's own words in the answer's message. A server from before KFIX-753 quoted teammates' leases raw in it (a
+ * teammate's work title, name and paths are text they wrote); that clause is cut, and only a warn's own closing line,
+ * which the server always put last, is kept. A message without the clause is the server's own text already.
+ */
+function ownWords(answer) {
+  const at = answer.message.indexOf(OLD_TEAMMATES);
+  if (at === -1) {
+    return answer.message;
+  }
+  const tail = answer.decision === "warn" && answer.message.endsWith(OLD_WARN_TAIL) ? OLD_WARN_TAIL : "";
+  return `${answer.message.slice(0, at)}${tail}`;
+}
+
+/** The most teammates' leases the gate's text lists; past it the last line counts the rest. */
+const MAX_OVERLAPS_SHOWN = 5;
+
+/** One teammate's open lease from the answer's `overlaps`, as one line; everything in it is the teammate's text. */
+function overlapLine(work) {
+  if (!isRecord(work)) {
+    return null;
+  }
+  const text = (value) => (typeof value === "string" ? value : "");
+  const name = text(work.who_name).trim() !== "" ? text(work.who_name) : text(work.who);
+  const paths = Array.isArray(work.paths) ? work.paths.filter((one) => typeof one === "string") : [];
+  const shown = paths.slice(0, 3).map((one) => JSON.stringify(one)).join(", ") + (paths.length > 3 ? ` and ${paths.length - 3} more` : "");
+  return `${JSON.stringify(name)} (${text(work.agent)}) on ${JSON.stringify(text(work.what))} since ${text(work.started_ago)} ago [lease ${text(work.lease)}, paths ${shown}]`;
+}
+
+/**
+ * The text the agent reads for an answer (KFIX-753): KoalaFix's own words, a block's warn-mode note when the edit went
+ * ahead, then the teammates whose open leases overlap the paths inside the team-memory frame (memory-frame.mjs), each
+ * line made harmless, so a teammate's work title can never read as KoalaFix telling the agent what to do.
+ */
+export function gateText(answer, mode) {
+  const own = answer.decision === "block" && mode !== "block" ? `${ownWords(answer)} ${WARN_MODE_NOTE}` : ownWords(answer);
+  const all = (Array.isArray(answer.overlaps) ? answer.overlaps : []).map(overlapLine).filter((line) => line !== null);
+  const lines = all.length > MAX_OVERLAPS_SHOWN ? [...all.slice(0, MAX_OVERLAPS_SHOWN - 1), `and ${all.length - MAX_OVERLAPS_SHOWN + 1} more`] : all;
+  return framed(lines.length === 0 ? [own] : [own, "Teammates with open work on these paths:"], lines);
+}
+
+/**
+ * What to print for Claude Code. A block in block mode denies the edit with the answer's text (gateText). A warn, or a
+ * block in warn mode, adds the text as context in front of the edit and leaves the permission flow alone: this never
  * prints `permissionDecision: "allow"`, which would skip the person's own permission prompt. Allow prints nothing.
  * Returns the stdout text ("" for nothing).
  */
@@ -216,12 +263,11 @@ export function gateOutput(answer, mode) {
     return "";
   }
   if (answer.decision === "block" && mode === "block") {
-    return `${JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: answer.message } })}\n`;
+    return `${JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: gateText(answer, mode) } })}\n`;
   }
   if (answer.decision === "block" || answer.decision === "warn") {
     // The server's block message asks for the edit again; in warn mode the edit has gone ahead, so the note says so.
-    const message = answer.decision === "block" ? `${answer.message} ${WARN_MODE_NOTE}` : answer.message;
-    return `${JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: message } })}\n`;
+    return `${JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: gateText(answer, mode) } })}\n`;
   }
   return "";
 }

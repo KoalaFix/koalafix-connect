@@ -12,8 +12,9 @@
 // Claude Code sign-in: one model call, which KALIBRATE_CAPTURE_AT_END=off turns off.
 // No pass when the session ended by logging out, when every turn was covered, when the person must pick a space and
 // has not picked one for this folder before (they are gone), for a session id that is not a UUID, or when no `claude` executable can be found (CLAUDE_CODE_EXECPATH
-// when it names `claude` or a `.js` entry point run under Node, never a bare node; else `claude` on PATH; a Windows
-// install that is only an npm `.cmd` shim is not started).
+// when it names `claude` or a `.js` entry point run under Node, never a bare node; else `claude` on an absolute PATH
+// entry outside the working folder; a Windows install that is only an npm `.cmd` shim is not started). The program
+// is always started by its absolute path, never by a bare name.
 // Other clients have no headless resume a hook can start.
 // Plain ESM, Node 22 APIs only, no dependencies.
 
@@ -22,6 +23,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { captureReason, capturing, fetchSpaces, isSpacesPage, memberSlugs, pickSpace, projectSlugs } from "./capture.mjs";
 import { pickedSpace } from "./spaces.mjs";
+import { resolveOnPath } from "./which.mjs";
 
 /**
  * The tools the last pass may call: the koalafix-auto plugin's copy of the server, the koalafix plugin's (whichever of
@@ -62,21 +64,20 @@ export function endPassDue(state, env, input) {
   return !(typeof input === "object" && input !== null && input.reason === "logout");
 }
 
-/** The `claude` executable to start: CLAUDE_CODE_EXECPATH when it is a file, else the first `claude` on PATH, else null. */
-export function claudeExecutable(env, platform = process.platform) {
+/**
+ * The `claude` executable to start: CLAUDE_CODE_EXECPATH when it is an absolute path to a file, else the first
+ * `claude.exe` (`claude` elsewhere) on an absolute PATH entry outside `cwd`, the folder it will run in, else null.
+ * It is always an absolute path: Windows looks a bare name up in the working folder first, where a cloned repository
+ * could have planted its own.
+ */
+export function claudeExecutable(env, platform = process.platform, cwd = process.cwd()) {
   const given = env.CLAUDE_CODE_EXECPATH;
-  if (typeof given === "string" && CLAUDE_FILE.test(path.basename(given)) && isFile(given)) {
+  if (typeof given === "string" && path.isAbsolute(given) && CLAUDE_FILE.test(path.basename(given)) && isFile(given)) {
     return given;
   }
-  const name = platform === "win32" ? "claude.exe" : "claude";
-  const dirs = String(env.PATH ?? env.Path ?? "").split(platform === "win32" ? ";" : ":").filter((dir) => dir !== "");
-  for (const dir of dirs) {
-    const candidate = path.join(dir, name);
-    if (isFile(candidate)) {
-      return candidate;
-    }
-  }
-  return null;
+  const found = resolveOnPath({ name: "claude", pathVar: env.PATH ?? env.Path, platform, cwd, isFile });
+  // Only claude.exe: a `.com` the resolver would also try is not Claude Code, and `.cmd` shims are never started.
+  return found !== null && /^claude(?:\.exe)?$/i.test(path.basename(found)) ? found : null;
 }
 
 function isFile(file) {
@@ -118,7 +119,7 @@ export async function startEndPass({ target, root, cwd, sessionId, env, deadline
     if (!SESSION_ID.test(sessionId)) {
       return "not a session id";
     }
-    const executable = claudeExecutable(env);
+    const executable = claudeExecutable(env, process.platform, cwd);
     if (executable === null) {
       return "no claude executable";
     }

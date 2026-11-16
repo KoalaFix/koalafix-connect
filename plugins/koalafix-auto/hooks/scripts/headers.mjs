@@ -18,11 +18,16 @@
 // With no such token, or on any problem, it prints `{}` and exits 0: Claude Code then connects without a credential
 // and asks for its own OAuth sign-in, as it would with no helper. A token only goes over https, or over http to the
 // local machine.
+//
+// The project token is pinned to the server it was issued for (token-pin.mjs). When `.kalibrate/config.json` names
+// another origin, it prints nothing on stdout, one plain line on stderr, and exits 1, as for any other project
+// refusal: Claude Code does not connect to a server a commit chose.
 
 import { parseHookArgs } from "./client.mjs";
 import { messageOf } from "./connect.mjs";
 import { userToken } from "./credentials.mjs";
 import { findConfig, mcpEndpoint, readToken, serverUrlOf, trustedRoot } from "./project.mjs";
+import { TokenPinError } from "./token-pin.mjs";
 
 const env = process.env;
 const args = parseHookArgs(process.argv.slice(2));
@@ -61,7 +66,9 @@ try {
   }
   process.stdout.write(`${JSON.stringify(args.user ? userHeaders() : projectHeaders())}\n`);
 } catch (error) {
-  process.stderr.write(`koalafix: headers helper: ${messageOf(error)}\n`);
+  // A `serverUrl` that is not the server the project's token was issued for (token-pin.mjs) is refused like any other
+  // project problem, with its own plain line: nothing on stdout and exit 1, so Claude Code does not connect at all.
+  process.stderr.write(error instanceof TokenPinError ? `${error.message}\n` : `koalafix: headers helper: ${messageOf(error)}\n`);
   if (args.user) {
     process.stdout.write("{}\n");
   } else {
