@@ -38,6 +38,7 @@ import { pickedSpace } from "./spaces.mjs";
 import { provenanceMeta } from "./provenance.mjs";
 import { pathsMeta, sessionPaths } from "./paths.mjs";
 import { closeReplaced } from "./lease-close.mjs";
+import { takeDue } from "./capture-due.mjs";
 
 /** How many results one recall asks for: enough for a first block, few enough to stay inside the budget. */
 const RECALL_LIMIT = 5;
@@ -45,6 +46,7 @@ const RECALL_LIMIT = 5;
 const env = process.env;
 const args = parseHookArgs(process.argv.slice(2));
 let context = null;
+let due = null;
 let notice = "";
 let session = null;
 
@@ -189,6 +191,9 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.prompt), async (dead
   }
   const { found, target } = located;
   const key = sessionKey(found.root, sessionId);
+  // A decision capture the last turn's Stop hook left (capture-due.mjs): it goes in front of this prompt, whatever else
+  // this hook finds, and still goes when the server cannot be reached.
+  due = takeDue(key, env);
   // A project folder `koalafix init` tied to a space always gets an automatic lease, named when one is started; a
   // plugin install gets one when its first prompt found the lease would land in this folder's space.
   const project = found.user !== true;
@@ -274,4 +279,5 @@ if (!outcome.ok) {
   context = null;
   notice += `koalafix: prompt hook skipped: ${messageOf(outcome.error)}\n`;
 }
-finish({ stdout: promptOutput(args.client, context), stderr: notice });
+const delivered = due === null ? context : [due, context].filter((part) => part !== null).join("\n\n");
+finish({ stdout: promptOutput(args.client, delivered), stderr: notice });

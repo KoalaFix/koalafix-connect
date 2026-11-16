@@ -67,7 +67,8 @@ const outcome = await runWithBudget(budgetFrom(env, BUDGETS.sessionStart), async
     plugin = true;
     const step = await signInStep({ env, client: args.client, deadlineAt, start: true });
     if (!step.signedIn) {
-      output = step.text === null ? "" : startOutput(step.text);
+      // The person sees one line with the link and code; the install notice waits for the next session start.
+      output = step.text === null ? "" : sessionStartOutput(args.client, step.text, step.person ?? null);
       return;
     }
     located = locateHook(args, env, input);

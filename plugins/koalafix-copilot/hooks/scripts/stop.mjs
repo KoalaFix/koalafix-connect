@@ -39,6 +39,7 @@ import { keepModel, keptModel, provenanceMeta, transcriptModel } from "./provena
 import { attended, captureDue, captureEvery, captureReason, capturing, fetchSpaces, holdable, isSpacesPage, memberSlugs, pickSpace, projectSlugs } from "./capture.mjs";
 import { pickFromTranscript, pickedSpace, rememberPick, transcriptSize } from "./spaces.mjs";
 import { closeReplaced } from "./lease-close.mjs";
+import { DUE_CLIENTS, dueReason } from "./capture-due.mjs";
 
 /**
  * `OpenArgs` (contract tools-io.ts): the caller's own items that need them (KOA2-545), the kinds the session brief
@@ -136,13 +137,15 @@ const outcome = await runWithBudget(budgetFrom(env, gemini ? BUDGETS.stopAtSessi
     const choice = pickSpace(memberSlugs(page), projectSlugs(found.root), picked);
     const ask = choice !== null && "ask" in choice;
     // Asked once a session: a later window that would ask again holds nothing.
-    if (choice !== null && !(ask && state.asked !== null)) {
-      holds.push(captureReason(choice, args.client));
+    // In Claude Code the capture waits for the next prompt, unseen (capture-due.mjs); elsewhere it holds the turn.
+    const capture = choice !== null && !(ask && state.asked !== null) ? choice : null;
+    if (capture !== null && !DUE_CLIENTS.has(args.client)) {
+      holds.push(captureReason(capture, args.client));
     }
     // The pick is looked for only in what the transcript gains after the ask.
     const asking = ask && state.asked === null;
     const askedFrom = asking ? transcriptSize(input.transcript_path) : state.askedFrom;
-    state = { ...state, covered: state.turns, capturedAt: now, asked: asking ? choice.ask : state.asked, askedFrom };
+    state = { ...state, covered: state.turns, capturedAt: now, asked: asking ? choice.ask : state.asked, askedFrom, ...(capture !== null && DUE_CLIENTS.has(args.client) ? { captureDue: dueReason(capture) } : {}) };
     writeState(key, state, env);
   }
   toldKey = key;
