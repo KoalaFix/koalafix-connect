@@ -15,9 +15,10 @@
 // With `--user` it serves a plugin's copy of the server instead (the koalafix-auto plugin), and reads no project
 // file: the token is the person's own (`koalafix login`, or the hooks' browser sign-in), and only the one saved for
 // exactly the origin Claude Code is connecting to, so the one browser sign-in serves the hooks and the tools alike.
-// With no such token, or on any problem, it prints `{}` and exits 0: Claude Code then connects without a credential
-// and asks for its own OAuth sign-in, as it would with no helper. A token only goes over https, or over http to the
-// local machine.
+// With no such token it sends the hooks' pending device sign-in code instead (userHeaders), so the one browser sign-in
+// covers the tools in this very session. On any problem it prints `{}` and exits 0: Claude Code then connects without
+// a credential and asks for its own OAuth sign-in, as it would with no helper. A token only goes over https, or over
+// http to the local machine.
 //
 // The project token is pinned to the server it was issued for (token-pin.mjs). When `.kalibrate/config.json` names
 // another origin, it prints nothing on stdout, one plain line on stderr, and exits 1, as for any other project
@@ -26,6 +27,7 @@
 import { parseHookArgs } from "./client.mjs";
 import { messageOf } from "./connect.mjs";
 import { userToken } from "./credentials.mjs";
+import { headersDeviceCode } from "./device.mjs";
 import { findConfig, mcpEndpoint, readToken, serverUrlOf, trustedRoot } from "./project.mjs";
 import { TokenPinError } from "./token-pin.mjs";
 
@@ -49,22 +51,35 @@ function projectHeaders() {
   return { Authorization: `Bearer ${token}` };
 }
 
-/** The plugin install's header: the person's own token for the server Claude Code names, or none. */
-function userHeaders() {
+/** How long the helper may take to start a sign-in for a person with no token (Claude Code waits on it to connect). */
+const DEVICE_START_MS = 4000;
+
+/**
+ * The plugin install's header: the person's own token for the server Claude Code names. With none yet, the hooks'
+ * pending device sign-in code (started here when session start has not yet), which that server takes as the approval's
+ * token once the person approves and never answers with a 401 before (mcp-server device-connection.ts): Claude Code
+ * then never starts a second sign-in of its own, and its tools work in the same session straight after the one
+ * approval. None when there is no code to send.
+ */
+async function userHeaders() {
   const asked = env.CLAUDE_CODE_MCP_SERVER_URL;
   if (asked === undefined || asked === "") {
     throw new Error("Claude Code named no server (CLAUDE_CODE_MCP_SERVER_URL), so no credential is sent");
   }
   mcpEndpoint(asked);
   const token = userToken(asked, env);
-  return token === "" ? {} : { Authorization: `Bearer ${token}` };
+  if (token !== "") {
+    return { Authorization: `Bearer ${token}` };
+  }
+  const code = await headersDeviceCode(asked, { env, client: "claude-code", deadlineAt: Date.now() + DEVICE_START_MS }).catch(() => null);
+  return code === null ? {} : { "X-KoalaFix-Device": code };
 }
 
 try {
   if (args.error !== null) {
     throw new Error(args.error);
   }
-  process.stdout.write(`${JSON.stringify(args.user ? userHeaders() : projectHeaders())}\n`);
+  process.stdout.write(`${JSON.stringify(args.user ? await userHeaders() : projectHeaders())}\n`);
 } catch (error) {
   // A `serverUrl` that is not the server the project's token was issued for (token-pin.mjs) is refused like any other
   // project problem, with its own plain line: nothing on stdout and exit 1, so Claude Code does not connect at all.

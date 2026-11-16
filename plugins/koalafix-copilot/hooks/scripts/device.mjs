@@ -144,8 +144,7 @@ export function personLine(pending, client) {
 export async function signInStep({ env = process.env, client, deadlineAt, start, fetchFn = globalThis.fetch }) {
   const file = pendingPath(env);
   const pending = readJsonFile(file);
-  const live = pending !== null && typeof pending.deviceCode === "string" && Date.parse(String(pending.expiresAt)) > Date.now();
-  if (live) {
+  if (isLive(pending)) {
     const polled = await post(`${apiBase(pending.serverUrl)}/api/v1/device/token`, { device_code: pending.deviceCode }, deadlineAt, fetchFn);
     if (polled.ok && typeof polled.body.token === "string" && polled.body.token !== "") {
       saveCredential(pending.serverUrl, polled.body.token, pending.label, env);
@@ -160,11 +159,35 @@ export async function signInStep({ env = process.env, client, deadlineAt, start,
   if (!start) {
     return { signedIn: false, text: null };
   }
+  const next = await startPending(env, client, deadlineAt, fetchFn);
+  if (next === null) {
+    return { signedIn: false, text: "KoalaFix team memory is installed but not signed in on this machine, and the server has no browser sign-in yet. Tell the user to run: koalafix login --token <a token from the KoalaFix dashboard>." };
+  }
+  return { signedIn: false, text: showText(next, client), person: personLine(next, client) };
+}
+
+/** Whether a device-pending.json entry is a code still waiting for its approval. */
+function isLive(pending) {
+  return pending !== null && typeof pending.deviceCode === "string" && typeof pending.serverUrl === "string" && Date.parse(String(pending.expiresAt)) > Date.now();
+}
+
+/**
+ * Starts a sign-in and keeps it in device-pending.json, unless another process kept a live one first: session start
+ * and the plugin's headers helper both run as Claude Code starts (headersDeviceCode), and both must show and send the
+ * same code. The file is created exclusively; the one that loses reads the winner's. Null when the server has no
+ * device sign-in (404 or 501).
+ */
+async function startPending(env, client, deadlineAt, fetchFn) {
+  const file = pendingPath(env);
+  const kept = readJsonFile(file);
+  if (isLive(kept)) {
+    return kept;
+  }
   const serverUrl = signInServer(env);
   const label = `${client} on ${os.hostname()}`;
   const started = await post(`${apiBase(serverUrl)}/api/v1/device/start`, { client: label }, deadlineAt, fetchFn);
   if (started.status === 404 || started.status === 501) {
-    return { signedIn: false, text: "KoalaFix team memory is installed but not signed in on this machine, and the server has no browser sign-in yet. Tell the user to run: koalafix login --token <a token from the KoalaFix dashboard>." };
+    return null;
   }
   const body = started.body;
   if (!started.ok || typeof body.device_code !== "string" || typeof body.user_code !== "string") {
@@ -178,6 +201,38 @@ export async function signInStep({ env = process.env, client, deadlineAt, start,
     uri: typeof body.verification_uri_complete === "string" ? body.verification_uri_complete : String(body.verification_uri ?? serverUrl),
     expiresAt: new Date(Date.now() + (typeof body.expires_in === "number" ? body.expires_in : 600) * 1000).toISOString(),
   };
-  writePrivate(file, next);
-  return { signedIn: false, text: showText(next, client), person: personLine(next, client) };
+  const current = readJsonFile(file);
+  if (isLive(current)) {
+    return current;
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  fs.rmSync(file, { force: true });
+  try {
+    fs.writeFileSync(file, `${JSON.stringify(next, null, 2)}
+`, { mode: 0o600, flag: "wx" });
+    return next;
+  } catch (error) {
+    const winner = readJsonFile(file);
+    if (isLive(winner)) {
+      return winner;
+    }
+    throw error;
+  }
+}
+
+/**
+ * The device code the plugin's headers helper sends when it has no token yet (the server's device-connection.ts): the
+ * live pending one, or a new one it starts, only for the server the sign-in goes to, so a code never leaves for
+ * another origin. Null when there is none to send.
+ */
+export async function headersDeviceCode(asked, { env = process.env, client = "claude-code", deadlineAt, fetchFn = globalThis.fetch }) {
+  const origin = originOf(asked);
+  const pending = readJsonFile(pendingPath(env));
+  if (isLive(pending)) {
+    return originOf(pending.serverUrl) === origin ? pending.deviceCode : null;
+  }
+  if (origin === null || originOf(signInServer(env)) !== origin) {
+    return null;
+  }
+  return (await startPending(env, client, deadlineAt, fetchFn))?.deviceCode ?? null;
 }
