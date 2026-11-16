@@ -1,10 +1,10 @@
 ---
 name: koalafix
-description: The KoalaFix team memory routine. Use at the start of every task in a session where the koalafix MCP server is connected, whenever you learn a durable fact or confirm one still holds, and when a task is finished. Covers recall before acting, work start and done, open items, remember and verify, and when share and settle need the user's yes.
+description: The team's shared memory (KoalaFix), holding facts, decisions and who is working on what, each with who checked it and when. Use it before any task or question about the user's team and its own work, such as pull requests and reviews, asking a teammate to approve or do something, who owns or is working on what, decisions and conventions (what did we decide, who is on X), meetings and team process, deploys, releases and environments like staging, incidents, customers, and project or task status. Also use it when the user makes or announces a decision for the team, when a durable fact is learned or confirmed, when a task is finished, and whenever the user says remember, recall, team memory or KoalaFix. Covers recall before acting, work start and done, open items, remember and verify, and when share and settle need the user's yes. Not for general questions that are not about the team, such as how a language feature works or what a formula means.
 ---
 
 ## KoalaFix (team memory)
-This project uses KoalaFix, the team's shared memory, through the `koalafix` MCP server.
+KoalaFix is the team's shared memory, reached through the `koalafix` MCP server.
 - On your first KoalaFix call in a chat or session, and whenever the user asks to set up: call `open` first.
   When it returns `setup` with `answer: "yes"`, or for a member's own line, run that mission now: read
   KoalaFix's own check-ins and team facts first, map every person already in the space (never wait for anyone
@@ -14,16 +14,20 @@ This project uses KoalaFix, the team's shared memory, through the `koalafix` MCP
   returns `setup` with no answer yet, ask the user once whether to set it up now and store the answer at once
   with `remember({ setup: { answer: "yes" } })` or `remember({ setup: { answer: "no" } })`, and never ask
   again. With no `setup`, follow `onboarding.next` when there is one.
-- Before you act, and before you answer a question about how this team works, call `recall` with what you are
+- Before you act, and before you answer a question about how this team works or any our/we question (our test
+  code, what we decided, who is our contact), call `recall` with what you are
   about to do or answer, and read the verdict first. Then, at the start of a task, call
   `work` with action `start` naming the task, with its branch, PR or issue as `ref` (or the `paths` you will change) so overlapping work shows up.
 - Verdict clear: go. stale: check the source, then `verify`. conflict: stop and show the user both claims.
   unknown: ask the user.
-- Learned something durable, or the user decided something (a choice, a rule, a name): `remember` it. A decision
+- Learned something durable, or the user decided something (a choice, a rule, a name, or a convention said while
+  asking for code, such as "every error report carries the invoice id"): `remember` it. Doing the work does not save it. A decision
   about the team's shared work (code, conventions, process, ownership, handoffs) goes to lane `team` with kind
   `decision`, in your own words: never quote the user (no `user_words`; set-up's one apply is the exception), and leave out
   anything personal or secret.
   Confirmed a fact still holds: `verify`.
+- Handing part of the task to a subagent: say in its prompt to call `recall` with its own task first. It does not see
+  this skill or these steps.
 - When the task is finished: call `work` with action `done`.
 - `share` and `settle` only with the user's yes, and leave open items you were not asked about alone: most close by themselves.
 - A link between two notes that is wrong (recall lists it under `related`): with the user's yes, drop it with `settle` on one note, `to` the other, action `dismiss`. There is no undo, and the pair is never linked again.
