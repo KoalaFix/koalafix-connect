@@ -8,6 +8,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { NoCredentialError, userToken } from "./credentials.mjs";
+import { kalibrateHome } from "./spool.mjs";
+import { assertPinned } from "./token-pin.mjs";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
@@ -175,12 +177,15 @@ export function serverUrlOf(config) {
 /**
  * The one-line token in `.kalibrate/token`, or "" when the file is missing, empty or not one line. A token file that
  * is a symbolic link, or that resolves outside the project's `.kalibrate` folder, throws: a repository could commit a
- * link that points at another credential on this machine.
+ * link that points at another credential on this machine. The project token is pinned to the server it was issued
+ * for (token-pin.mjs): when `serverUrl` names another origin it throws TokenPinError, and the person's own credential
+ * is not tried in its place.
  */
 export function readToken(found, env = process.env) {
   const text = found.dir === null ? null : readInside(found.dir, "token");
   const token = text === null ? "" : text.trim();
   if (token !== "" && !/\s/.test(token)) {
+    assertPinned({ home: kalibrateHome(env), root: found.root, serverUrl: String(found.config.serverUrl ?? "") });
     return token;
   }
   // No project token: the person's own credential, only when it was issued for exactly this server (credentials.mjs).
@@ -209,9 +214,11 @@ export function hasProjectInstall(root) {
  */
 export function resolveTarget(found, env = process.env) {
   const serverUrl = serverUrlOf(found.config);
+  // The address is checked before the token is read, so a server no token may go to is never pinned either.
+  const url = mcpEndpoint(serverUrl);
   const token = readToken(found, env);
   if (token === "") {
     throw new NoCredentialError(found.user === true ? "no KoalaFix credential for this server; run koalafix login" : ".kalibrate/token is missing or empty, and koalafix login has no token for this server");
   }
-  return { url: mcpEndpoint(serverUrl), api: apiBase(serverUrl), token };
+  return { url, api: apiBase(serverUrl), token };
 }

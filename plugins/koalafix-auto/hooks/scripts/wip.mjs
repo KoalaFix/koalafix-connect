@@ -137,6 +137,8 @@ export function readState(key, env = process.env) {
       nudged: parsed.nudged === true,
       // A plugin install: whether the lease would land in this folder's space (lease-space.mjs); null: not known yet.
       autoLease: parsed.autoLease === true ? true : parsed.autoLease === null ? null : false,
+      // A plugin install: whether this folder belongs to one of the person's spaces, the recall's gate (KFIX-780).
+      inSpace: parsed.inSpace === true ? true : parsed.inSpace === false ? false : null,
       turns: Number.isInteger(parsed.turns) && parsed.turns >= 0 ? parsed.turns : 0,
       covered: Number.isInteger(parsed.covered) && parsed.covered >= 0 ? parsed.covered : 0,
       capturedAt: Number.isFinite(parsed.capturedAt) ? parsed.capturedAt : null,
@@ -222,11 +224,66 @@ function person(row, field, max) {
   return str(row[`${field}_name`], max) || str(row[field], max);
 }
 
+/** The fact's hosted check-this flag (recall puts `also` on the one fact a subject prints it under), or null. */
+function checkOf(fact) {
+  const flag = fact.check !== null && typeof fact.check === "object" ? fact.check : null;
+  return flag === null || str(flag.key, 80) === "" || !Array.isArray(flag.also) ? null : { key: str(flag.key, 80), saved_after: flag.saved_after, also: flag.also };
+}
+
+/**
+ * A fact's signature in the session's shown list: its key and state, and the key its flag names, so a flag recall adds
+ * mid-session (a newer sibling saved since) is news and is shown, and a state or flag already shown is not again.
+ */
+function factSignature(fact) {
+  const flag = checkOf(fact);
+  return `f:${fact.key}:${fact.state}${flag === null ? "" : `+check=${flag.key}`}`;
+}
+
+/** "saved 2026-11-03", or "as of 2026-11-02" when the writer said when it was true, as the session brief says it; "" for none. */
+function factDate(fact) {
+  const claim = fact.current !== null && typeof fact.current === "object" ? fact.current : {};
+  const day = (at) => (typeof at === "string" && /^\d{4}-\d{2}-\d{2}/.test(at) ? at.slice(0, 10) : "");
+  const asOf = day(claim.as_of);
+  if (asOf !== "") {
+    return `, as of ${asOf}`;
+  }
+  const saved = day(claim.said_at);
+  return saved === "" ? "" : `, saved ${saved}`;
+}
+
+/**
+ * One fact: key, value, state, the day it was saved and its version (KFIX-772: two keys saved five days apart read the
+ * same age without it), the owner, recall's "check this" flag when a newer fact of its subject has not been checked
+ * against it (KFIX-769), then its own instruction.
+ */
 function factLine(fact) {
   const value = "value" in fact ? ` = ${shownValue(fact.value)}` : "";
-  const owner = typeof fact.owner === "string" && fact.owner !== "" ? `, owner ${person(fact, "owner", 40)}` : "";
+  // The server sends `owner_name` alone over MCP (no handle beside a name), an older one both.
+  const named = person(fact, "owner", 40);
+  const owner = named !== "" ? `, owner ${named}` : "";
+  const version = typeof fact.ref === "string" ? /@\d+$/.exec(fact.ref)?.[0] ?? "" : "";
+  const ref = version === "" ? "" : `, ${version}`;
+  // One line a subject, as recall prints it: only the fact that hosts the subject's flag (it carries `also`) says it.
+  const flag = checkOf(fact);
+  const also = flag === null ? [] : flag.also.map((key) => str(key, 80)).filter((key) => key !== "");
+  const check = flag === null ? "" : ` check this: ${flag.key} was saved ${str(flag.saved_after, 20) || "later"} after it${also.length === 0 ? "" : ` (also ${also.join(", ")})`}.`;
   const told = typeof fact.instruction === "string" && fact.instruction !== "" ? ` ${str(fact.instruction, 160)}` : "";
-  return `- ${str(fact.key, 80)}${value} (${str(fact.state, 20) || "?"}${owner})${told}`;
+  return `- ${str(fact.key, 80)}${value} (${str(fact.state, 20) || "?"}${factDate(fact)}${ref}${owner})${check}${told}`;
+}
+
+/** What a later write says about a note, as recall's structured note carries it (KFIX-776, KFIX-778); "" for none. */
+function noteMark(note) {
+  const obj = (value) => (value !== null && typeof value === "object" ? value : null);
+  const corrected = obj(note.corrected_by);
+  const replaced = obj(note.replaced_by);
+  const check = obj(note.check);
+  if (corrected !== null && str(corrected.id, 20) !== "") {
+    return ` (corrected by ${str(corrected.id, 20)}, same writer: read that one)`;
+  }
+  if (replaced !== null && str(replaced.ref, 100) !== "") {
+    return ` (replaced by ${str(replaced.ref, 100)})`;
+  }
+  return check !== null && str(check.key, 80) !== "" ? ` (check this: ${str(check.key, 80)} was saved ${str(check.saved_after, 20) || "later"} after it and names it)` : "";
 }
 
 function workingLine(work) {
@@ -351,11 +408,11 @@ export function firstBlock(recall, work, ownLease = null, paths = [], project = 
   const warned = collisions.filter((entry) => block.add(collisionLine(entry, paths), `x:${entry.lease}`, `w:${entry.lease}`)).length > 0;
   block.section("Facts:");
   for (const fact of list(recall, "facts")) {
-    block.add(factLine(fact), `f:${fact.key}:${fact.state}`);
+    block.add(factLine(fact), factSignature(fact));
   }
   block.section("Notes:");
   for (const note of list(recall, "notes").slice(0, MAX_NOTES)) {
-    block.add(`- ${str(note.id, 20)}: ${str(note.preview, 160)}`, `n:${note.id}`);
+    block.add(`- ${str(note.id, 20)}: ${str(note.preview, 160)}${noteMark(note)}`, `n:${note.id}`);
   }
   const collided = new Set(collisions.map((entry) => entry.lease));
   block.section("Teammates working:");
@@ -396,7 +453,7 @@ export function newsBlock(recall, state, paths = [], project = null, room = MAX_
   block.cap(memoryBudget(guidance, Math.min(room, MAX_NEWS_CHARS)));
   let newKeys = 0;
   for (const fact of list(recall, "facts")) {
-    const signature = `f:${fact.key}:${fact.state}`;
+    const signature = factSignature(fact);
     if (seen.has(signature)) {
       continue;
     }
