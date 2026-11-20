@@ -1,7 +1,7 @@
 {
   "name": "koalafix",
-  "version": "0.2.4",
-  "description": "Shared team memory for the AI tools your team uses: recall what the team already knows before acting, save notes and decisions, verify facts, and see who is working on what. One remote server at https://mcp.koalafix.com/mcp; you sign in through the browser the first time a tool is used. Nothing runs on your machine: no scripts, no hooks, no helper program. The automatic Claude Code hooks are in the marketplace plugin koalafix-auto.",
+  "version": "0.2.5",
+  "description": "Shared team memory for the AI tools your team uses. Ask what your team already knows, with who checked each fact and when; keep notes; record a team decision when you agree to; and see who is working on what. One remote server at https://mcp.koalafix.com/mcp; you sign in through the browser the first time a tool is used. Nothing runs on your machine.",
   "author": {
     "name": "KoalaFix",
     "url": "https://koalafix.com"
