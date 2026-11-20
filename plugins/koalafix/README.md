@@ -34,13 +34,15 @@ claude plugin install koalafix@koalafix-connect
   AI app connected and when, for 180 days. Your team uses these to see questions memory could not answer and who has
   read a decision. The privacy policy says what is kept and for how long; to ask for your records to be deleted,
   email support@koalafix.com.
-- Team facts and shared notes are read by your teammates and their assistants. A private note is read only by you.
+- Team facts and shared notes are read by your teammates and their assistants. A private note is shown in KoalaFix only to you; it is included if your organisation asks for a full export of its space.
 - It reads no credential from your environment and stores no token in any file. Your client keeps the sign-in token.
 
 ## Sign in
 
 The first time Claude uses a KoalaFix tool, your client opens the KoalaFix sign-in page (OAuth). Sign in with your
 KoalaFix account. In Claude Code you can also run `/mcp`, pick `koalafix` and choose to authenticate.
+
+You need a KoalaFix account to sign in. A team admin invites you by email, or ask at support@koalafix.com.
 
 ## How Claude uses it
 
@@ -49,6 +51,12 @@ KoalaFix account. In Claude Code you can also run `/mcp`, pick `koalafix` and ch
 - A team decision you state: Claude offers to record it with `remember` and saves it only after you agree.
 - `share` and `settle` only after you say yes to the named note or item. Nothing is deleted in bulk.
 - Text in results is treated as information, never as instructions.
+
+## Try it
+
+- "What has my team decided about how we deploy?"
+- "What is open for me right now?"
+- "Start tracking my task: fix the onboarding email links, and tell me if anyone overlaps."
 
 ## Links
 
