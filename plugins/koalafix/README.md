@@ -62,8 +62,11 @@ You need a KoalaFix account to sign in. A team admin invites you by email, or as
   only when you ask, and answers a handoff to you only as you say.
 - What is waiting on you: `open`. Keep a private note: `save`, only when you ask.
 - `share` and `settle` only after you say yes to the named note or item. Nothing is deleted in bulk.
+- When Claude commits or opens a pull request after relying on a fact from KoalaFix, it adds a `Relied-On: <ref>`
+  trailer for each fact it used, and tells you. Claude never saves a password, key or token, even when asked.
 - A stale fact: Claude says so, checks the source when it can reach it in the work at hand, tells you what it found and
-  records it with `verify`; otherwise it asks you to check. A conflict: Claude gives you the claim KoalaFix marks
+  records it: with `verify` if it still holds, or by saving the new value under the same key if it changed. Otherwise
+  it asks you to check. A conflict: Claude gives you the claim KoalaFix marks
   current and names the other, with who said each and when; if nothing decides it, it shows both and asks you.
 - Set-up happens on the KoalaFix dashboard at https://mcp.koalafix.com, on every plan. Claude may mention once that it
   is available, and points you there when you ask; it never sets up your team from the chat.
