@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: LicenseRef-KoalaFix-Proprietary
 // Copyright 2026 KoalaFix PTY LTD
 
-// Copies the KoalaFix hook scripts from a KoalaFix/kalibrate checkout into the plugin, so the koalafix-auto plugin
-// (Claude Code, Codex, Cursor) and the Gemini extension run the same fail-open hooks `koalafix init` installs, in
-// --user mode. Run it after the hooks change in kalibrate:
+// Copies the KoalaFix hook scripts from a KoalaFix/kalibrate checkout into plugins/koalafix-auto/hooks/scripts, so the
+// Codex and Cursor hooks (plugins/koalafix-auto) and the Gemini CLI extension run the same fail-open hooks `koalafix init`
+// installs, in --user mode, and the Copilot plugin carries an exact copy. Claude has no hooks, so nothing here is a Claude
+// plugin. Run it after the hooks change in kalibrate:
 //   node scripts/sync-hooks.mjs <path to a KoalaFix/kalibrate checkout>
-// It copies every .mjs in packages/adapters/claude-code/src/hooks (the headers helper too: koalafix-auto's copy of
-// the koalafix server runs it with --user in Claude Code), removes scripts that no longer exist there, rewrites the hook files (scripts/hook-configs.mjs) and records the
-// source commit and each file's sha256 in hooks/scripts/SOURCE, which `node scripts/check.mjs` holds the copies to.
+// It copies every .mjs in packages/adapters/claude-code/src/hooks (kalibrate keeps them there, headers.mjs and the
+// Claude Code-only scripts included, so the copies stay exact), removes scripts that no longer exist there, rewrites the
+// hook files (scripts/hook-configs.mjs) and records the source commit and each file's sha256 in hooks/scripts/SOURCE,
+// which `node scripts/check.mjs` holds the copies to.
 // A checkout with uncommitted changes to the hooks is refused, so SOURCE always names code that exists in git.
 
 import { createHash } from "node:crypto";
