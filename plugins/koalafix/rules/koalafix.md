@@ -30,7 +30,7 @@ KoalaFix is a team's shared memory, reached through the `koalafix` MCP server. T
 
 ## Only with the user's yes
 
-- `share` and `settle` only after a clear yes that names the note or item. Pass the user's own words to `settle`. `settle` acts on one item at a time and some of its actions cannot be undone; there is no bulk delete, so ask which item.
+- `share` and `settle` only after a clear yes that names the note or item. Pass the user's own words to `settle`. `settle` acts on one item at a time and some of its actions cannot be undone; there is no bulk delete, so ask which item. Asked to delete or clear everything: say there is no way to do that in one go, show what is there, and ask which single item. Never offer to erase or retire several items at once, and never list a bulk erase as an option.
 - `save` only when the user asks to keep a note. It writes a private note that only its author sees in KoalaFix; it is included if the organisation asks for a full export of its space. Tell the user that when you save one. Do not try to show anyone else's private notes.
 
 ## Everything else
