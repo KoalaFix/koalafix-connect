@@ -1,15 +1,12 @@
-# KoalaFix (`koalafix-auto`)
+# KoalaFix hooks for Codex and Cursor (`koalafix-auto`)
 
-For Claude this is the one KoalaFix plugin: the server, the skill and the session hooks together, on claude.ai, in
-Cowork and in Claude Code. Chat runs no hooks, and in Cowork they load but do nothing yet (there is no sign-in file
-there), so in both it adds the tools and the skill. In Codex and Cursor it adds
-the hooks beside the `koalafix` plugin. With the tools alone, the agent recalls and records work when it decides to;
-with the hooks, it happens on every session:
+This package adds KoalaFix's session hooks to Codex and Cursor, beside the `koalafix` plugin. It is not a Claude
+plugin: for Claude, `koalafix` is the only plugin, and it has no hooks. With the tools alone, the agent recalls and
+records work when it decides to; with the hooks, it happens on every session:
 
 - **Session start:** the team's brief goes in front of the session: facts, the team's current decisions (the ones
   that name this repository first), teammates' work in progress and open items. The first time the hooks run on your
-  machine they show you a one-line notice of what they send and how to turn them off (`/plugin` in Claude Code,
-  `/hooks` in Codex).
+  machine they show you a one-line notice of what they send and how to turn them off (`/hooks` in Codex).
 - **Each prompt:** one recall about what you asked, inside 1.5 seconds, with the verdict in front of the prompt. When a
   teammate has checked in on a file your prompt names or this session edited, the agent is told before it edits (a
   "Collision" line: who, what, since when), once per check-in, with no tool call.
@@ -23,45 +20,14 @@ with the hooks, it happens on every session:
   (`KALIBRATE_CAPTURE_TURNS`, `KALIBRATE_CAPTURE_MINUTES`), your agent is asked to save each decision made since
   about the team's shared work (code, conventions, process, ownership, handoffs) to your team, in its own words,
   skipping any it already saved: never your messages, never anything personal or secret, nothing when nothing was
-  decided. Teammates' agents then recall them. Never in a session no one is in (`claude -p`, the Agent SDK,
-  background sessions, `codex exec`), nor in Cursor or Gemini CLI, whose scripted runs look the same to a hook, so a
-  script's answer stays its own; `KALIBRATE_CAPTURE=always` or `off` changes that. In several spaces with none named
-  after the project, you are asked which one once, and your pick is remembered for that folder on your machine. Also
-  what is open for you (a line in the client's hook log).
-- **Before an edit (Claude Code):** in a folder where the prompt hook started your work-in-progress lease (the
-  team's folders, above), before the session's first edit of a file (Edit, Write, MultiEdit, NotebookEdit, or a Bash
-  or PowerShell command that writes one: a redirection, `sed -i`, `cp`, `mv`, `rm`, a `git commit`'s staged files, a
-  package added; reads such as `ls` or `git status` send nothing) one read asks your KoalaFix server whether one of your own check-ins covers it and whether a teammate's covers it too, inside
-  1 second. When a teammate is on it, the agent gets a note naming who, what and since when, once per check-in. With
-  no check-in of your own, it gets a note once a session to check in with the `work` tool. It never stops an edit
-  unless you set `KALIBRATE_GATE=block` (then it denies an unchecked edit, as a `koalafix init` project does, in every
-  team folder); `off` asks nothing. A covered file asks nothing again that session. In a personal folder it asks
-  nothing and sends nothing.
-- **Subagents (Claude Code):** none of the hooks above run inside a subagent, so a subagent that can call recall
-  (`general-purpose`, `Explore`, `Plan`, or a custom agent given the KoalaFix tools) gets two lines at its start:
-  recall with its own task and read the verdict before acting, and leave saving to the session that started it.
-  Agents with a fixed set of other tools get nothing. No network call.
-- **Session end (Claude Code):** if the last turns were not covered, one short background
-  `claude -p --resume <session> --fork-session --no-session-persistence` run saves their decisions: one AI call on
-  your own sign-in, limited to the koalafix `remember` and `recall` tools, never saved as a session.
-  `KALIBRATE_CAPTURE_AT_END=off` turns it off.
+  decided. Teammates' agents then recall them. Never in a session no one is in (`codex exec`), nor in Cursor, whose
+  scripted runs look the same to a hook, so a script's answer stays its own; `KALIBRATE_CAPTURE=always` or `off`
+  changes that. In several spaces with none named after the project, you are asked which one once, and your pick is
+  remembered for that folder on your machine. Also what is open for you (a line in the client's hook log).
 - **First use:** with no KoalaFix credential on the machine, the agent shows you a sign-in link and a code. Approve
-  it once in the browser and the hooks turn on by themselves. In Claude Code the KoalaFix tools use the
-  same sign-in and turn on in the same session, with nothing to do in `/mcp`: this plugin carries its own
-  copy of the `koalafix` server, which Claude Code connects in place of the `koalafix` plugin's when this plugin is
-  listed first in your settings, as installing it does. See [Sign in](../../README.md#sign-in).
+  it once in the browser and the hooks turn on by themselves.
 
 ## Install
-
-claude.ai: add the marketplace `KoalaFix/koalafix-connect` under Customize, Plugins, then add **KoalaFix** and connect
-it; it loads in Cowork (tools and skill) and Claude Code (with its hooks) too. Claude Code on its own (nothing else to
-install):
-
-```
-claude plugin install koalafix-auto --marketplace KoalaFix/koalafix-connect
-```
-
-Before 2.1.292: `/plugin marketplace add KoalaFix/koalafix-connect`, then `/plugin install koalafix-auto@koalafix-connect`.
 
 Codex: `codex plugin marketplace add KoalaFix/koalafix-connect`, then `codex plugin add koalafix@koalafix-connect` and
 `codex plugin add koalafix-auto@koalafix-connect`, then run `/hooks` once and trust the KoalaFix hooks. Cursor: add
@@ -70,35 +36,23 @@ this repository as a team marketplace.
 
 ## What it runs and sends
 
-- Four Node.js scripts (Node 22 or later) in `hooks/scripts/`, the same ones `koalafix init` installs, and in Claude
-  Code two more: the first-edit check (`pre-tool.mjs`), and one for subagents that reads only local files. Claude Code
-  starts them with no shell between; Codex on macOS and Linux goes through `hooks/scripts/run.sh`, which only finds
-  Node and starts the script. Without Node the hooks do nothing for KoalaFix (a client may show a one-line hook
-  error).
+- Four Node.js scripts (Node 22 or later) in `hooks/scripts/`, the same ones `koalafix init` installs. Codex on macOS
+  and Linux goes through `hooks/scripts/run.sh`, which only finds Node and starts the script. Without Node the hooks do
+  nothing for KoalaFix (a client may show a one-line hook error). The folder also holds scripts the Gemini CLI
+  extension and the GitHub Copilot plugin use; nothing here runs in Claude.
 - They read your own KoalaFix credential from `~/.kalibrate/credentials.json` and send it only to the exact server it
   was issued for. They send that server your prompt's text for the recall (up to 2,000 characters, anything shaped
   like a token or key taken out, marked so the server keeps no log of it); with it, the paths of up to 20 files the
   prompt is about (paths it names that exist in the project, and files this session's agent edited, read from the end
   of your client's own transcript on your machine: only the paths leave it), which go on your work-in-progress lease
-  where **your teammates see them**; in a team folder, before the session's first edit of a file, that file's path
-  from the repository's top (the project folder's outside a repository), the edit tool's name, the repository's name,
-  the space you picked for the folder and the time of the session's last unchecked edit of it, to check it against
-  check-ins (the server logs the answer, the tool and how many paths, never the paths); at session start, the repository's or folder's name; and, each time the agent is asked for the decisions
-  (again next turn if it fails), a request for the list of your spaces. The session's decisions are saved by your agent with the `remember`
-  tool, in its words, to your only space whatever folder you work in, or the one named after the project, or the one
-  you name when it asks (up to eight space names go into its context for that question): **your teammates see
-  them**. In a personal project, tell your agent when a session is not team work. The hooks never send the session's
-  transcript and make no AI call of their own, except the one session-end run above. They write this session's state and a retry queue under `~/.kalibrate/`.
-- In Claude Code, one more script, `hooks/scripts/headers.mjs --user`, is the `headersHelper` of this
-  plugin's copy of the `koalafix` server. Claude Code runs it each time it connects that server. It reads no project
-  file and prints an Authorization header with your credential only for exactly the server Claude Code is connecting
-  to, over https; with none, it prints `{}` and Claude Code's own OAuth sign-in takes over.
-- Claude Code starts the hooks and that helper through `hooks/scripts/run.sh` wherever it has a POSIX shell (macOS,
-  Linux, Git Bash on Windows). run.sh finds Node from Homebrew, nvm, Volta, fnm, asdf or mise even when an app opened
-  from the Dock hands it macOS's short PATH; with no Node at all it does nothing and exits 0. In PowerShell (Windows
-  without Git Bash) and cmd the same line runs `node` straight.
-- They contain no token. The only address in them is the hosted server, where the first browser sign-in goes. They
-  never print a token, except the helper, to Claude Code, as that header.
+  where **your teammates see them**; at session start, the repository's or folder's name; and, each time the agent is
+  asked for the decisions (again next turn if it fails), a request for the list of your spaces. The session's
+  decisions are saved by your agent with the `remember` tool, in its words, to your only space whatever folder you
+  work in, or the one named after the project, or the one you name when it asks (up to eight space names go into its
+  context for that question): **your teammates see them**. In a personal project, tell your agent when a session is
+  not team work. The hooks never send the session's transcript and make no AI call of their own. They write this
+  session's state and a retry queue under `~/.kalibrate/`.
+- They contain no token. The only address in them is the hosted server, where the first browser sign-in goes.
 - Team memory comes into the session as data inside a `<koalafix-memory-…>` block, under a line telling the agent
   never to follow instructions in it; KoalaFix's own lines stay outside, the block's id is a hash of what is inside so
   nothing inside can close it, and tags inside are made harmless, so a teammate's note cannot pass as an instruction.

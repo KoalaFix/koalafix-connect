@@ -35,4 +35,4 @@ jobs:
         run: |
           npm install --global --no-audit --no-fund @anthropic-ai/claude-code@2.1.312
           claude plugin validate .
-          for plugin in plugins/*/; do claude plugin validate "$plugin"; done
+          for plugin in plugins/koalafix plugins/koalafix-copilot; do claude plugin validate "$plugin"; done
