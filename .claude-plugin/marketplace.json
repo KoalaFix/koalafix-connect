@@ -16,18 +16,6 @@
         "team",
         "work-items"
       ]
-    },
-    {
-      "name": "koalafix-auto",
-      "source": "./plugins/koalafix-auto",
-      "description": "The same tools and skill as koalafix, plus the Claude Code hooks and the headers helper that make team memory automatic: the team brief at session start, recall on each prompt, a note before editing a file a teammate is on, one browser sign-in. Pick this one in Claude Code when you want the hooks. They send each prompt (keys and tokens removed, never logged) and the file paths it names to your KoalaFix server; teammates see your project, branch and those paths. Needs Node.js 22+.",
-      "category": "development",
-      "tags": [
-        "memory",
-        "team",
-        "work-items",
-        "hooks"
-      ]
     }
   ]
 }
