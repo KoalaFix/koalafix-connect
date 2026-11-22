@@ -13,10 +13,9 @@
 // 4. No file holds a token, a key or a bearer header, and no hook file names a server: the scripts find the
 //    person's server and token at run time, so the bundle carries neither.
 // 5. The listed koalafix plugin runs nothing on the machine, so the OpenAI and Claude directories take it: no hooks, no
-//    headersHelper, no headers, and only the allowed keys in its Claude manifest (the Claude directory refused the hooks
-//    plugin koalafix-auto 0.5.3 and 0.5.9 for command hooks and a headersHelper, accepted only from Verified
-//    organisations, and flagged a field from another tool's manifest). displayName is a Claude manifest field since
-//    the November 2026 manifest reference, and claude plugin validate --strict --profile directory accepts it.
+//    headersHelper, no headers, no displayName in its Claude manifest (the Claude directory refused the hooks plugin
+//    koalafix-auto 0.5.3 and 0.5.9 for command hooks and a headersHelper, accepted only from Verified organisations,
+//    and flagged a field from another tool's manifest).
 // 6. The Copilot plugin's copies (scripts, skill, licence) equal their originals (scripts/copies.mjs), it ships no
 //    other file, its adapter exists, its marketplace entry matches its name, version and folder, its mcp.json names
 //    exactly the koalafix plugin's server, and the adapter's tests pass.
@@ -195,10 +194,10 @@ for (const [name, entry] of Object.entries(servers(path.join(listed, ".mcp.json"
     problems.push(`plugins/koalafix/.mcp.json server ${name} has ${extra.join(", ")}: the listed plugin names its server by type and url only (no headers, nothing run)`);
   }
 }
-// The directory flagged an unrecognised field and refuses anything run on the machine: the Claude manifest carries
-// exactly these keys (displayName, so the directory shows KoalaFix and not Koalafix, is one since the November 2026
-// manifest reference); the server comes from .mcp.json and the skill from skills/, both found by their default paths.
-const LISTED_CLAUDE_KEYS = ["name", "displayName", "version", "description", "author", "homepage", "repository", "license", "keywords", "icon", "documentationUrl", "supportUrl", "privacyPolicyUrl", "termsOfServiceUrl"];
+// The directory flagged an unrecognised field and a field from another tool's manifest (displayName), and refuses
+// anything run on the machine: the Claude manifest carries exactly these keys; the server comes from .mcp.json and the
+// skill from skills/, both found by their default paths.
+const LISTED_CLAUDE_KEYS = ["name", "version", "description", "author", "homepage", "repository", "license", "keywords", "icon", "documentationUrl", "supportUrl", "privacyPolicyUrl", "termsOfServiceUrl"];
 const listedClaude = JSON.parse(read(path.join(listed, ".claude-plugin", "plugin.json")));
 for (const key of Object.keys(listedClaude).filter((key) => !LISTED_CLAUDE_KEYS.includes(key))) {
   problems.push(`plugins/koalafix/.claude-plugin/plugin.json has ${key}: the listed plugin's Claude manifest carries only ${LISTED_CLAUDE_KEYS.join(", ")}`);

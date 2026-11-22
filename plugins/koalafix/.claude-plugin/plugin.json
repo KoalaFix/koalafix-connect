@@ -1,6 +1,5 @@
 {
   "name": "koalafix",
-  "displayName": "KoalaFix",
   "version": "0.2.5",
   "description": "Shared team memory for the AI tools your team uses. Your assistant checks what your team already knows before working on your team's code, services or decisions, with who checked each fact and when; saves a team decision you state and tells you what it saved; keeps notes when you ask; and shows who is working on what. One remote server at https://mcp.koalafix.com/mcp; you sign in through the browser the first time a tool is used. Nothing runs on your machine.",
   "author": {
