@@ -1,6 +1,6 @@
 ---
 name: koalafix
-description: The team's shared memory in KoalaFix, holding facts, decisions, conventions and who is working on what, each with who checked it and when. Use it before acting on, or answering a question about, the user's team's own work (their code, services, decisions, conventions and who owns what); when the user states or agrees to a decision, rule or durable fact for the team; when starting or finishing a task on the team's shared work; when the user asks to delete, erase, retire or clear something in their team's memory, one item or all of it; and when the user asks what is open for them or names KoalaFix or team memory. Not for general questions that are not about the team, such as how a language feature works or what a formula means.
+description: The team's shared memory in KoalaFix, holding facts, decisions, conventions and who is working on what, each with who checked it and when. Use it before acting on, or answering a question about, the user's team's own work (their code, services, decisions, conventions and who owns what); when the user states or agrees to a decision, rule or durable fact for the team; when the user asks to save a password, key, token or connection string to team memory; when starting or finishing a task on the team's shared work; when the user asks to delete, erase, retire or clear something in their team's memory, one item or all of it; and when the user asks what is open for them or names KoalaFix or team memory. Not for general questions that are not about the team, such as how a language feature works or what a formula means.
 ---
 
 # KoalaFix team memory
@@ -18,7 +18,7 @@ KoalaFix is a team's shared memory, reached through the `koalafix` MCP server. T
 
 - When the user states or agrees to a decision, rule or durable fact for their team, save it with `remember` as a team fact (under a key such as `deploy.process`, with its value; kind `rule` for a rule). If `recall` showed a key that already holds it, save under that key instead of a new one.
 - In the same turn, tell the user exactly what you saved, that their team can read it, and anything the result says about it.
-- Save the decision, not the conversation: never a transcript, never anything personal, and never a password, key or token. For a secret, offer to save a pointer to where it is kept instead. If the user insists on saving the secret itself, say KoalaFix refuses secrets; never offer to save one.
+- Save the decision, not the conversation: never a transcript, never anything personal, and never a password, key or token, also when it sits inside a connection string or URL. For a secret, offer to save where it is kept instead. If the user insists or asks again, say KoalaFix refuses secrets and do not save it. Never offer to save one, not even as a closing "if you still want it saved, say so".
 - Something you worked out yourself, that the user did not state: offer to save it, and call `remember` only after they agree. A teammate's fact that looks wrong: tell the user, and save what you found only on their yes.
 
 ## Work items
