@@ -1,6 +1,6 @@
 ---
 name: koalafix
-description: The team's shared memory in KoalaFix, holding facts, decisions, conventions and who is working on what, each with who checked it and when. Use it before acting on, or answering a question about, the user's team's own work (their code, services, decisions, conventions and who owns what); when the user states or agrees to a decision, rule or durable fact for the team; when starting or finishing a task on the team's shared work; and when the user asks what is open for them or names KoalaFix or team memory. Not for general questions that are not about the team, such as how a language feature works or what a formula means.
+description: The team's shared memory in KoalaFix, holding facts, decisions, conventions and who is working on what, each with who checked it and when. Use it before acting on, or answering a question about, the user's team's own work (their code, services, decisions, conventions and who owns what); when the user states or agrees to a decision, rule or durable fact for the team; when starting or finishing a task on the team's shared work; when the user asks to delete, erase, retire or clear something in their team's memory, one item or all of it; and when the user asks what is open for them or names KoalaFix or team memory. Not for general questions that are not about the team, such as how a language feature works or what a formula means.
 ---
 
 # KoalaFix team memory

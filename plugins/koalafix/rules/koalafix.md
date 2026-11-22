@@ -1,5 +1,5 @@
 ---
-description: KoalaFix team memory. Use before acting on or answering a question about the user's team's own work, when the user states or agrees to a decision for the team, when starting or finishing a task on the team's shared work, and when the user names KoalaFix or team memory.
+description: KoalaFix team memory. Use before acting on or answering a question about the user's team's own work, when the user states or agrees to a decision for the team, when starting or finishing a task on the team's shared work, when the user asks to delete, erase, retire or clear something in their team's memory, one item or all of it, and when the user names KoalaFix or team memory.
 alwaysApply: false
 ---
 
