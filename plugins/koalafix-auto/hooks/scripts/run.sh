@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: LicenseRef-KoalaFix-Proprietary
 # Copyright 2026 KoalaFix PTY LTD
 
-# Starts one KoalaFix hook script with Node, for a client that runs hooks through sh (Claude Code and Codex on macOS
-# and Linux), and Claude Code's MCP headers helper the same way.
+# Starts one KoalaFix hook script with Node, for a client that runs hooks through sh (Codex on macOS and Linux).
+# (Kept from the retired Claude plugin: it still accepts pre-tool, subagent-start and headers, which no client runs now.)
 #   sh run.sh <session-start|prompt|pre-tool|stop|session-end|subagent-start|headers> [the script's flags]
 # A desktop app started from the Dock or Finder hands its hooks a short PATH (/usr/bin:/bin:/usr/sbin:/sbin) that
 # misses a Node from Homebrew, nvm, Volta, fnm, asdf or mise, so this also looks in those places. With no Node at

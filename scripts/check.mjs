@@ -4,8 +4,8 @@
 // The checks this repository runs before a change ships, with no network and no dependencies:
 //   node scripts/check.mjs [<path to a KoalaFix/kalibrate checkout>]
 // 1. Every JSON file parses.
-// 2. The hook files are exactly what scripts/hook-configs.mjs writes, and every script they name exists. Every hook
-//    name they and the headers helper hand run.sh is one run.sh accepts.
+// 2. The hook files (Codex, Cursor, Gemini CLI, Copilot) are exactly what scripts/hook-configs.mjs writes, and every
+//    script they name exists. Every hook name they hand run.sh is one run.sh accepts.
 // 3. Every copied hook script matches the sha256 recorded in hooks/scripts/SOURCE. With a kalibrate checkout given,
 //    each copy must also equal the file in git at the commit SOURCE names (`git show <commit>:<path>`), so a hand
 //    edit with a fresh hash in SOURCE still fails, and the checkout's own files must not have moved on since that
@@ -13,19 +13,17 @@
 // 4. No file holds a token, a key or a bearer header, and no hook file names a server: the scripts find the
 //    person's server and token at run time, so the bundle carries neither.
 // 5. The listed koalafix plugin runs nothing on the machine, so the OpenAI and Claude directories take it: no hooks, no
-//    headersHelper, no headers, no displayName in its Claude manifest (the Claude directory refused koalafix-auto 0.5.3
-//    and 0.5.9 for command hooks and a headersHelper, accepted only from Verified organisations, and flagged a field
-//    from another tool's manifest), and its skill identical to koalafix-auto's copy (scripts/copies.mjs, in 6).
+//    headersHelper, no headers, no displayName in its Claude manifest (the Claude directory refused the hooks plugin
+//    koalafix-auto 0.5.3 and 0.5.9 for command hooks and a headersHelper, accepted only from Verified organisations,
+//    and flagged a field from another tool's manifest).
 // 6. The Copilot plugin's copies (scripts, skill, licence) equal their originals (scripts/copies.mjs), it ships no
 //    other file, its adapter exists, its marketplace entry matches its name, version and folder, its mcp.json names
 //    exactly the koalafix plugin's server, and the adapter's tests pass.
-// 7. koalafix-auto's copy of the koalafix server (Claude Code) has the koalafix plugin's URL and runs a copied helper
-//    with --user, and the listed plugin names no helper.
-// 8. The Claude marketplace lists koalafix (the directory plugin) and koalafix-auto, each whole on its own: no
-//    dependency (claude.ai skips them, so people had to add koalafix by hand) and koalafix-auto's own copy of the skill
-//    at a path only its Claude manifest names; every Claude plugin and marketplace description is at most 500
-//    characters, as claude.ai's upload refuses longer ones.
-// 9. Every file in the listed koalafix plugin is a type the Claude directory takes from an unverified organisation:
+// 7. The Claude marketplace lists koalafix and nothing else, and no Claude manifest, Claude Code hook file or
+//    headers helper is left in plugins/koalafix-auto, the Codex and Cursor hooks package (the Claude plugin of that
+//    name was retired on 20 Nov 2026). Every Claude plugin and marketplace description is at most 500 characters, as
+//    claude.ai's upload refuses longer ones.
+// 8. Every file in the listed koalafix plugin is a type the Claude directory takes from an unverified organisation:
 //    Markdown (.md), text, JSON, YAML, or a real PNG, JPEG, GIF, WebP or ICO, judged by name and content; UTF-8, no
 //    NUL, no #!, no package config. The directory refused 0.2.1 for a clean UTF-8 .mdc rule, so the extension counts.
 // Exits 1 and names each problem.
@@ -36,7 +34,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { copyProblems } from "./copies.mjs";
-import { HEADERS_HELPER, HOOK_FILES, text } from "./hook-configs.mjs";
+import { HOOK_FILES, text } from "./hook-configs.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const scripts = path.join(root, "plugins", "koalafix-auto", "hooks", "scripts");
@@ -88,15 +86,14 @@ for (const [file, value] of Object.entries(HOOK_FILES)) {
   }
 }
 
-// Every hook name a hook file or the headers helper hands run.sh is one run.sh accepts. run.sh exits 0 and prints only
-// a stderr line for a name it does not know, and Claude Code's line `exec`s it, so its node fallback never runs: the
-// edit check and the subagent hook did nothing from 314626a (3 Nov 2026) until this check came in.
+// Every hook name a hook file hands run.sh is one run.sh accepts. run.sh exits 0 and prints only a stderr line for a
+// name it does not know, so a misspelt name would leave a hook doing nothing without any failure.
 const runSh = read(path.join(scripts, "run.sh"));
 const accepted = runSh.match(/case \$hook in\n\s*([a-z| -]+)\) ;;/)?.[1].split("|").map((name) => name.trim()) ?? [];
 if (accepted.length === 0) {
   problems.push("plugins/koalafix-auto/hooks/scripts/run.sh: no `case $hook in <names>) ;;` line to read its hook names from");
 }
-for (const [file, body] of [...Object.keys(HOOK_FILES).filter((file) => fs.existsSync(path.join(root, file))).map((file) => [file, read(path.join(root, file))]), ["the headers helper", HEADERS_HELPER]]) {
+for (const [file, body] of Object.keys(HOOK_FILES).filter((file) => fs.existsSync(path.join(root, file))).map((file) => [file, read(path.join(root, file))])) {
   for (const [, name] of body.matchAll(/run\.sh\\?"? ([a-z-]+)/g)) {
     if (!accepted.includes(name)) {
       problems.push(`${file} starts run.sh with ${name}, which run.sh does not accept (it takes ${accepted.join(", ")})`);
@@ -188,20 +185,6 @@ try {
   problems.push(`tests/copilot.test.mjs failed:\n${String(error.stdout ?? "").split("\n").filter((line) => /^not ok|^# fail|✖/.test(line.trim())).join("\n")}`);
 }
 
-// Claude Code keeps one of two plugin servers at the same URL, so koalafix-auto's copy (the one whose helper sends the
-// hooks' sign-in) must point exactly where the koalafix plugin's does, or both would connect and every tool show
-// twice. Its helper must be a copied script run with --user, and the listed plugin must run none.
-const listedServer = JSON.parse(read(path.join(listed, ".mcp.json"))).mcpServers?.koalafix;
-const autoManifest = path.join(root, "plugins", "koalafix-auto", ".claude-plugin", "plugin.json");
-const autoServer = JSON.parse(read(autoManifest)).mcpServers?.koalafix;
-if (autoServer === undefined || autoServer.url !== listedServer?.url) {
-  problems.push(`${rel(autoManifest)} must declare the koalafix server at the koalafix plugin's URL (${listedServer?.url})`);
-} else {
-  // Through run.sh, so a Node a desktop app's short PATH misses on macOS is still found (scripts/hook-configs.mjs).
-  if (autoServer.headersHelper !== HEADERS_HELPER || !fs.existsSync(path.join(scripts, "headers.mjs")) || !fs.existsSync(path.join(scripts, "run.sh"))) {
-    problems.push(`${rel(autoManifest)}: the koalafix server's headersHelper must be exactly ${JSON.stringify(HEADERS_HELPER)}, with headers.mjs and run.sh copied`);
-  }
-}
 if (files.some((file) => rel(file).startsWith("plugins/koalafix/") && /\.json$/.test(file) && read(file).includes("headersHelper"))) {
   problems.push("plugins/koalafix names a headersHelper: the listed plugin must run nothing on the machine");
 }
@@ -263,20 +246,26 @@ for (const full of files.filter((file) => rel(file).startsWith("plugins/koalafix
 
 const claudeMarket = JSON.parse(read(path.join(root, ".claude-plugin", "marketplace.json")));
 const claudeListed = (claudeMarket.plugins ?? []).map((entry) => `${entry.name} ${entry.source}`);
-if (claudeListed.join("|") !== "koalafix ./plugins/koalafix|koalafix-auto ./plugins/koalafix-auto") {
-  problems.push(`.claude-plugin/marketplace.json must list koalafix (./plugins/koalafix, the directory plugin) then koalafix-auto (./plugins/koalafix-auto), nothing else; it lists: ${claudeListed.join(", ") || "nothing"}`);
+if (claudeListed.join("|") !== "koalafix ./plugins/koalafix") {
+  problems.push(`.claude-plugin/marketplace.json must list koalafix (./plugins/koalafix) and nothing else: koalafix is the only Claude plugin; it lists: ${claudeListed.join(", ") || "nothing"}`);
 }
-const autoClaude = JSON.parse(read(autoManifest));
-if (autoClaude.dependencies !== undefined) {
-  problems.push(`${rel(autoManifest)} names dependencies: claude.ai skips them, so koalafix-auto must carry everything itself`);
+// koalafix-auto (the Claude plugin with hooks) is retired: what stays in its folder is the Codex and Cursor hooks and
+// the scripts the Gemini CLI extension and the Copilot plugin share, none of it for Claude.
+const auto = path.join(root, "plugins", "koalafix-auto");
+for (const left of [".claude-plugin", "claude-skills", "hooks/claude-code.json"]) {
+  if (fs.existsSync(path.join(auto, left))) {
+    problems.push(`plugins/koalafix-auto/${left} is a Claude plugin file: the Claude plugin koalafix-auto is retired, koalafix is the only one`);
+  }
 }
-if (autoClaude.skills !== "./claude-skills/" || !fs.existsSync(path.join(root, "plugins", "koalafix-auto", "claude-skills", "koalafix", "SKILL.md"))) {
-  problems.push(`${rel(autoManifest)} must name skills "./claude-skills/", which holds the copy of the koalafix skill (run: node scripts/copies.mjs)`);
+for (const full of files.filter((file) => /.(json|mjs|md|sh|yml)$/.test(file) && rel(file) !== "scripts/check.mjs")) {
+  if (/CLAUDE_PLUGIN_ROOT|headersHelper/.test(read(full)) && !rel(full).startsWith("plugins/koalafix-copilot/hooks/scripts/") && !rel(full).startsWith("plugins/koalafix-auto/hooks/scripts/")) {
+    problems.push(`${rel(full)} names CLAUDE_PLUGIN_ROOT or a headersHelper: no Claude plugin here runs anything on the machine`);
+  }
 }
 const CLAUDE_DESCRIPTION_MAX = 500;
 const claudeDescriptions = [
   ...(claudeMarket.plugins ?? []).map((entry) => [`.claude-plugin/marketplace.json (${entry.name})`, entry.description]),
-  ...["koalafix", "koalafix-auto"].map((name) => path.join(root, "plugins", name, ".claude-plugin", "plugin.json")).filter((file) => fs.existsSync(file)).map((file) => [rel(file), JSON.parse(read(file)).description]),
+  ...["koalafix"].map((name) => path.join(root, "plugins", name, ".claude-plugin", "plugin.json")).filter((file) => fs.existsSync(file)).map((file) => [rel(file), JSON.parse(read(file)).description]),
 ];
 for (const [where, description] of claudeDescriptions) {
   if (String(description ?? "").length > CLAUDE_DESCRIPTION_MAX) {
@@ -293,12 +282,6 @@ if (skillDescription === undefined) {
 } else if (skillDescription.length > SKILL_DESCRIPTION_MAX || skillDescription.includes(": ") || skillDescription.includes("—")) {
   problems.push(`plugins/koalafix/skills/koalafix/SKILL.md: the description must be at most ${SKILL_DESCRIPTION_MAX} characters with no ": " and no em dash (it is ${skillDescription.length} characters)`);
 }
-for (const other of [".codex-plugin", ".cursor-plugin"].map((dir) => path.join(root, "plugins", "koalafix-auto", dir, "plugin.json"))) {
-  if (fs.existsSync(other) && read(other).includes("claude-skills")) {
-    problems.push(`${rel(other)} names claude-skills: Codex and Cursor list koalafix beside koalafix-auto and would load the skill twice`);
-  }
-}
-
 if (problems.length > 0) {
   console.error(problems.map((problem) => `- ${problem}`).join("\n"));
   process.exit(1);
