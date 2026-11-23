@@ -19,6 +19,8 @@
 // 6. The Copilot plugin's copies (scripts, skill, licence) equal their originals (scripts/copies.mjs), it ships no
 //    other file, its adapter exists, its marketplace entry matches its name, version and folder, its mcp.json names
 //    exactly the koalafix plugin's server, and the adapter's tests pass.
+// 6b. The Antigravity plugin (the repository root): its manifest matches the Gemini extension's name and version, its
+//    mcp_config.json names exactly the koalafix plugin's server by serverUrl, and the adapter's tests pass.
 // 7. The Claude marketplace lists koalafix and nothing else, and no Claude manifest, Claude Code hook file or
 //    headers helper is left in plugins/koalafix-auto, the Codex and Cursor hooks package (the Claude plugin of that
 //    name was retired on 20 Nov 2026). Every Claude plugin and marketplace description is at most 500 characters, as
@@ -79,6 +81,12 @@ for (const [file, value] of Object.entries(HOOK_FILES)) {
   for (const [, name] of body.matchAll(/\$\{PLUGIN_ROOT\}\/(hooks\/[a-z-]+\.mjs)/g)) {
     if (!fs.existsSync(path.join(root, "plugins", "koalafix-copilot", name))) {
       problems.push(`${file} runs ${name}, which is not in plugins/koalafix-copilot`);
+    }
+  }
+  // Antigravity runs a plugin hook from the plugin root, here the repository root (scripts/hook-configs.mjs).
+  for (const [, name] of body.matchAll(/node \.\/(hooks\/[a-z-]+\.mjs)/g)) {
+    if (!fs.existsSync(path.join(root, name))) {
+      problems.push(`${file} runs ./${name}, which is not in the repository root`);
     }
   }
   if (/https?:\/\//.test(body)) {
@@ -183,6 +191,26 @@ try {
   execFileSync(process.execPath, ["--test", path.join(root, "tests", "copilot.test.mjs")], { cwd: root, stdio: "pipe" });
 } catch (error) {
   problems.push(`tests/copilot.test.mjs failed:\n${String(error.stdout ?? "").split("\n").filter((line) => /^not ok|^# fail|✖/.test(line.trim())).join("\n")}`);
+}
+
+// Antigravity CLI installs the repository root as the plugin koalafix: its manifest has the Gemini CLI extension's
+// name and version (one folder, one version), and mcp_config.json names exactly the koalafix plugin's server, by
+// `serverUrl` (Antigravity does not read `httpUrl`).
+const antigravityManifest = JSON.parse(read(path.join(root, ".antigravity-plugin", "plugin.json")));
+const geminiManifest = JSON.parse(read(path.join(root, "gemini-extension.json")));
+if (antigravityManifest.name !== geminiManifest.name || antigravityManifest.version !== geminiManifest.version) {
+  problems.push(`.antigravity-plugin/plugin.json is ${antigravityManifest.name} ${antigravityManifest.version}; it must match gemini-extension.json, ${geminiManifest.name} ${geminiManifest.version}`);
+}
+const antigravityServers = JSON.stringify(Object.fromEntries(Object.entries(servers(path.join(root, "mcp_config.json"))).map(([name, entry]) => [name, entry.serverUrl])));
+if (antigravityServers !== wanted) {
+  problems.push(`mcp_config.json names ${antigravityServers} by serverUrl; it must name exactly the koalafix plugin's server, ${wanted}`);
+}
+
+// The Antigravity adapter's tests (no network: their scripts are fakes).
+try {
+  execFileSync(process.execPath, ["--test", path.join(root, "tests", "antigravity.test.mjs")], { cwd: root, stdio: "pipe" });
+} catch (error) {
+  problems.push(`tests/antigravity.test.mjs failed:\n${String(error.stdout ?? "").split("\n").filter((line) => /^not ok|^# fail|✖/.test(line.trim())).join("\n")}`);
 }
 
 if (files.some((file) => rel(file).startsWith("plugins/koalafix/") && /\.json$/.test(file) && read(file).includes("headersHelper"))) {

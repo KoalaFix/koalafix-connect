@@ -1,0 +1,25 @@
+{
+  "koalafix": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "node ./hooks/antigravity.mjs SessionStart",
+        "timeout": 10
+      }
+    ],
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "node ./hooks/antigravity.mjs PreInvocation",
+        "timeout": 5
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node ./hooks/antigravity.mjs Stop",
+        "timeout": 5
+      }
+    ]
+  }
+}

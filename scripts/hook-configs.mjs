@@ -3,8 +3,9 @@
 
 // The hook files for every client that lets a package other than the Claude plugin run hooks, written from one table
 // so they stay in step with each other and with `koalafix init`: the same four scripts, the same --user mode, the same
-// timeouts (Copilot reaches them through a small adapter, plugins/koalafix-copilot/hooks/copilot.mjs). There is no
-// Claude plugin with hooks: the Claude plugin, koalafix, runs nothing on the machine.
+// timeouts (Copilot and Antigravity reach them through small adapters, plugins/koalafix-copilot/hooks/copilot.mjs and
+// hooks/antigravity.mjs). There is no Claude plugin with hooks: the Claude plugin, koalafix, runs nothing on the
+// machine.
 //   node scripts/hook-configs.mjs          rewrites the files
 //   node scripts/hook-configs.mjs --check  exits 1 when a file differs from what this table writes
 // Each client starts `node` with a command that parses the same in every shell it uses. Codex on macOS and Linux goes
@@ -112,12 +113,32 @@ function copilot() {
   };
 }
 
+/**
+ * Antigravity CLI: the repository root is the plugin, and Antigravity reads only a root hooks.json, a map of group names
+ * to events. SessionStart, PreInvocation and Stop take handlers directly, timeouts in seconds. Antigravity runs a plugin
+ * hook with the plugin root as its working directory (agy 1.5.14, and its docs say to use relative paths), so the
+ * command names the adapter by a relative path, which parses the same in every shell. Every event goes through
+ * hooks/antigravity.mjs, which runs the same scripts and prints the `injectSteps` Antigravity reads. PreInvocation runs
+ * before each model call; the adapter recalls on a turn's first only. There is no SessionEnd event.
+ */
+function antigravity() {
+  const hook = (event, key) => ({ type: "command", command: `node ./hooks/antigravity.mjs ${event}`, timeout: HOOKS[key].timeout });
+  return {
+    koalafix: {
+      SessionStart: [hook("SessionStart", "sessionStart")],
+      PreInvocation: [hook("PreInvocation", "prompt")],
+      Stop: [hook("Stop", "stop")],
+    },
+  };
+}
+
 /** Every hook file, by its path in this repository. */
 export const HOOK_FILES = {
   "plugins/koalafix-auto/hooks/codex.json": codex(),
   "plugins/koalafix-auto/hooks/cursor.json": cursor(),
   "hooks/hooks.json": gemini(),
   "plugins/koalafix-copilot/com.github.copilot/hooks/hooks.json": copilot(),
+  "hooks.json": antigravity(),
 };
 
 export const text = (value) => `${JSON.stringify(value, null, 2)}\n`;

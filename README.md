@@ -83,6 +83,21 @@ rules folder takes `.md`, which is what the Claude directory accepts).
 gemini extensions install https://github.com/KoalaFix/koalafix-connect
 ```
 
+### Antigravity CLI
+
+Google moved personal accounts from Gemini CLI to Antigravity CLI (`agy`) on 18 June 2026. The repository root is also
+an Antigravity plugin, with the server and the session hooks:
+
+```
+agy plugin install https://github.com/KoalaFix/koalafix-connect
+```
+
+The tools sign in through the browser: in `agy`, open `/plugin`, expand koalafix under Installed and choose Sign in.
+The hooks show their own sign-in link and code the first time they run. They reach the scripts through
+`hooks/antigravity.mjs`, which turns Antigravity's hook events into the ones the scripts read: the brief at
+`SessionStart`, the recall on a prompt's first model call (`PreInvocation` runs before every call), the end of a turn
+at `Stop`. Antigravity has no session-end event, so a work-in-progress lease ends by itself.
+
 ### GitHub Copilot (Copilot CLI, VS Code, the GitHub Copilot app)
 
 ```
@@ -249,10 +264,11 @@ KoalaFix service. See [LICENSE](LICENSE).
 | `plugins/koalafix/` | The one Claude plugin, which Codex and Cursor list too: Claude, Codex and Cursor manifests, `.mcp.json`, skill, Cursor rule, icons. No hooks, so directories that refuse hooks can list it |
 | `plugins/koalafix-auto/` | The session hooks for Codex and Cursor: one hook file per client and the shared scripts the Gemini CLI extension and the Copilot plugin use too. Not a Claude plugin: Claude has no hooks |
 | `hooks/hooks.json` | The Gemini CLI extension's session hooks (they run the scripts in `plugins/koalafix-auto/`) |
+| `.antigravity-plugin/plugin.json`, `mcp_config.json`, `hooks.json`, `hooks/antigravity.mjs` | The Antigravity CLI plugin (the repository root): its manifest, the server by `serverUrl`, the session hooks and the adapter that runs the scripts in `plugins/koalafix-auto/` |
 | `.github/plugin/marketplace.json` | GitHub Copilot marketplace (Copilot reads it before `.claude-plugin/`) |
 | `plugins/koalafix-copilot/` | The GitHub Copilot plugin (Agent Plugins 1.0): `plugin.json`, `mcp.json`, the skill, `com.github.copilot/hooks/hooks.json`, the adapter `hooks/copilot.mjs` and an exact copy of the hook scripts |
 | `scripts/sync-hooks.mjs`, `scripts/hook-configs.mjs`, `scripts/copies.mjs` | Copy the hook scripts from KoalaFix's source, write the five hook files from one table, and keep the Copilot plugin's copies (scripts, skill, licence) identical to their originals |
-| `tests/` | `node --test tests/copilot.test.mjs`: the Copilot adapter |
+| `tests/` | `node --test tests/copilot.test.mjs` and `tests/antigravity.test.mjs`: the Copilot and Antigravity adapters |
 | `scripts/check.mjs` | The checks before a change ships: hook files in step, scripts unchanged since copied, no secrets, listed plugin hook-free |
 | `gemini-extension.json`, `GEMINI.md` | Gemini CLI extension. Both must stay at the repository root: the Gemini CLI extensions gallery only indexes a root `gemini-extension.json` (plus the GitHub topic `gemini-cli-extension`). |
 | `server.json` | Official MCP Registry entry |
