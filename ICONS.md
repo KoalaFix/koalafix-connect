@@ -20,7 +20,6 @@ listings is retired: no listing, package or store page uses it.
 | `koalafix-512.png` | 512 x 512 px | PNG | Claude plugin directory icon; Claude connector directory icon (uploaded in the portal); OpenAI plugin directory `logo` | `.claude-plugin/plugin.json` `icon`, `.codex-plugin/plugin.json` `interface.logo` |
 | `koalafix-64.png` | 64 x 64 px | PNG | Codex and ChatGPT `composerIcon` (square, at least 48 x 48) | `.codex-plugin/plugin.json` `interface.composerIcon` |
 | `koalafix-512.png` | 512 x 512 px | PNG | Cursor Marketplace logo | `.cursor-plugin/plugin.json` `logo` |
-| `koalafix-48.png` | 48 x 48 px | PNG | Small-icon slots (OpenAI's minimum size) | none |
 
 The MCP Registry entry (`server.json`) uses the icon the KoalaFix server serves itself, `https://mcp.koalafix.com/favicon.svg`,
 so the registry does not depend on this repository.
