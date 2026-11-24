@@ -185,7 +185,7 @@ GitHub Copilot, hooks make it automatic (Claude has none):
 | Codex (CLI and desktop) | `koalafix-auto` plugin, after you trust it in `/hooks` | SessionStart, UserPromptSubmit, Stop, SessionEnd |
 | Cursor | `koalafix-auto` plugin (its hooks run from `${CURSOR_PLUGIN_ROOT}`) | sessionStart, beforeSubmitPrompt, stop, sessionEnd |
 | Gemini CLI | this extension | SessionStart, BeforeAgent, AfterAgent, SessionEnd |
-| GitHub Copilot: CLI, the Copilot app, VS Code (hooks in preview there) | `koalafix-copilot` plugin, through `hooks/copilot.mjs` | sessionStart, userPromptTransformed (the recall goes after your prompt in what the model receives), agentStop, sessionEnd |
+| GitHub Copilot: CLI, the Copilot app, VS Code (hooks in preview there) | `koalafix-copilot` plugin, through `hooks/scripts/copilot.mjs` | sessionStart, userPromptTransformed (the recall goes after your prompt in what the model receives), agentStop, sessionEnd |
 | Copilot cloud agent, JetBrains, Visual Studio | none: the cloud agent runs only repository hook files and has no credential; JetBrains and Visual Studio run no Copilot hooks | the server's instructions; the cloud agent connects with a token |
 | Claude (claude.ai, desktop and mobile chat, Cowork, Claude Code), ChatGPT | none: the `koalafix` plugin runs nothing on your machine | the server's instructions and the skill carry the routine |
 | OpenCode | none from here: `koalafix init` writes its compaction plugin and an AGENTS.md block | |
@@ -266,7 +266,7 @@ KoalaFix service. See [LICENSE](LICENSE).
 | `hooks/hooks.json` | The Gemini CLI extension's session hooks (they run the scripts in `plugins/koalafix-auto/`) |
 | `.antigravity-plugin/plugin.json`, `mcp_config.json`, `hooks.json`, `hooks/antigravity.mjs` | The Antigravity CLI plugin (the repository root): its manifest, the server by `serverUrl`, the session hooks and the adapter that runs the scripts in `plugins/koalafix-auto/` |
 | `.github/plugin/marketplace.json` | GitHub Copilot marketplace (Copilot reads it before `.claude-plugin/`) |
-| `plugins/koalafix-copilot/` | The GitHub Copilot plugin (Agent Plugins 1.0): `plugin.json`, `mcp.json`, the skill, `com.github.copilot/hooks/hooks.json`, the adapter `hooks/copilot.mjs` and an exact copy of the hook scripts |
+| `plugins/koalafix-copilot/` | The GitHub Copilot plugin (Agent Plugins 1.0): `plugin.json`, `mcp.json`, the skill, `com.github.copilot/hooks/hooks.json`, and an exact copy of the hook scripts, whose `hooks/scripts/copilot.mjs` is the Copilot adapter |
 | `scripts/sync-hooks.mjs`, `scripts/hook-configs.mjs`, `scripts/copies.mjs` | Copy the hook scripts from KoalaFix's source, write the five hook files from one table, and keep the Copilot plugin's copies (scripts, skill, licence) identical to their originals |
 | `tests/` | `node --test tests/copilot.test.mjs` and `tests/antigravity.test.mjs`: the Copilot and Antigravity adapters |
 | `scripts/check.mjs` | The checks before a change ships: hook files in step, scripts unchanged since copied, no secrets, listed plugin hook-free |

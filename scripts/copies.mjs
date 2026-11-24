@@ -73,7 +73,7 @@ export function copyProblems(root) {
     problems.push(`${COPILOT_SCRIPTS}/${name} is not in ${SCRIPTS} (run: node scripts/copies.mjs)`);
   }
   // Nothing else may ride along in the Copilot plugin: it installs whole onto people's machines.
-  const own = ["plugin.json", "mcp.json", "README.md", "com.github.copilot/hooks/hooks.json", "hooks/copilot.mjs"].map((rel) => `${PLUGIN}/${rel}`);
+  const own = ["plugin.json", "mcp.json", "README.md", "com.github.copilot/hooks/hooks.json"].map((rel) => `${PLUGIN}/${rel}`);
   const allowed = new Set([...own, ...Object.keys(COPIED_FILES), ...wanted.map((name) => `${COPILOT_SCRIPTS}/${name}`)]);
   for (const rel of listFiles(root, PLUGIN)) {
     if (!allowed.has(rel)) {
