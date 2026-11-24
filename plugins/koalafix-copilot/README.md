@@ -67,9 +67,9 @@ use. Both sign-ins use the same KoalaFix account.
 
 ## What the hooks run and send
 
-- One Node.js script (Node 22 or later), `hooks/copilot.mjs`, for each Copilot event. It runs the same scripts as
-  the `koalafix-auto` hooks package for Codex and Cursor (`hooks/scripts/`, an exact copy) and only changes
-  the shape of what they print into the field Copilot reads. Without Node the hooks do nothing and Copilot logs one
+- One Node.js script (Node 22 or later), `hooks/scripts/copilot.mjs`, for each Copilot event. It runs the same
+  scripts as the `koalafix-auto` hooks package for Codex and Cursor (`hooks/scripts/`, an exact copy) as Copilot's
+  own client, and only changes the shape of what they print into the field Copilot reads. Without Node the hooks do nothing and Copilot logs one
   hook error.
 - They read your own KoalaFix credential from `~/.kalibrate/credentials.json` and send it only to the exact server it
   was issued for. They send that server your prompt's text for the recall (up to 2,000 characters, anything shaped

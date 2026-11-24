@@ -3,7 +3,7 @@
 
 // The hook files for every client that lets a package other than the Claude plugin run hooks, written from one table
 // so they stay in step with each other and with `koalafix init`: the same four scripts, the same --user mode, the same
-// timeouts (Copilot and Antigravity reach them through small adapters, plugins/koalafix-copilot/hooks/copilot.mjs and
+// timeouts (Copilot and Antigravity reach them through small adapters, plugins/koalafix-copilot/hooks/scripts/copilot.mjs and
 // hooks/antigravity.mjs). There is no Claude plugin with hooks: the Claude plugin, koalafix, runs nothing on the
 // machine.
 //   node scripts/hook-configs.mjs          rewrites the files
@@ -95,13 +95,14 @@ function gemini() {
 
 /**
  * GitHub Copilot (CLI, the Copilot app, VS Code's Copilot harness): an Agent Plugins 1.0 plugin reads its hooks from
- * com.github.copilot/hooks/hooks.json. Every event goes through hooks/copilot.mjs, which runs the same scripts and
- * prints the field Copilot reads. Copilot fills in ${PLUGIN_ROOT} before the shell sees the command, so the line parses
+ * com.github.copilot/hooks/hooks.json. Every event goes through hooks/scripts/copilot.mjs, kalibrate's own Copilot hook
+ * (copied with the scripts, never edited here), which runs the same scripts as `--client copilot` and prints the field
+ * Copilot reads. As its own client, a Copilot session is never owed Claude Code's `claude -p --resume` end pass. Copilot fills in ${PLUGIN_ROOT} before the shell sees the command, so the line parses
  * the same in bash and PowerShell (tested on Windows with Copilot CLI 1.0.103). Per-prompt recall rides on
  * userPromptTransformed: Copilot drops a command userPromptSubmitted hook's output.
  */
 function copilot() {
-  const hook = (event, timeoutSec) => ({ type: "command", command: `node "\${PLUGIN_ROOT}/hooks/copilot.mjs" ${event}`, timeoutSec });
+  const hook = (event, timeoutSec) => ({ type: "command", command: `node "\${PLUGIN_ROOT}/hooks/scripts/copilot.mjs" ${event}`, timeoutSec });
   return {
     version: 1,
     hooks: {

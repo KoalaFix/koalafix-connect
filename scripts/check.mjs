@@ -78,7 +78,7 @@ for (const [file, value] of Object.entries(HOOK_FILES)) {
       problems.push(`${file} runs hooks/scripts/${name}, which is not in plugins/koalafix-auto/hooks/scripts`);
     }
   }
-  for (const [, name] of body.matchAll(/\$\{PLUGIN_ROOT\}\/(hooks\/[a-z-]+\.mjs)/g)) {
+  for (const [, name] of body.matchAll(/\$\{PLUGIN_ROOT\}\/(hooks\/(?:scripts\/)?[a-z-]+\.mjs)/g)) {
     if (!fs.existsSync(path.join(root, "plugins", "koalafix-copilot", name))) {
       problems.push(`${file} runs ${name}, which is not in plugins/koalafix-copilot`);
     }

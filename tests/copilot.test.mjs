@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-KoalaFix-Proprietary
 // Copyright 2026 KoalaFix PTY LTD
 
-// The Copilot adapter (plugins/koalafix-copilot/hooks/copilot.mjs): what it gives a script, what it prints for each
+// The Copilot adapter (plugins/koalafix-copilot/hooks/scripts/copilot.mjs, copied from kalibrate): what it gives a script, what it prints for each
 // Copilot event, and that every failure prints `{}`. The scripts here are fakes in a temp folder, so nothing reaches
 // a server.   node --test tests/copilot.test.mjs (scripts/check.mjs runs it too)
 
@@ -12,11 +12,12 @@ import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
 import { fileURLToPath } from "node:url";
-import { CLIENT, EVENTS, contextOf, copilotOutput, runAdapter, slimInput } from "../plugins/koalafix-copilot/hooks/copilot.mjs";
+import { CLIENT, EVENTS, contextOf, copilotOutput, runCopilotHook, slimInput } from "../plugins/koalafix-copilot/hooks/scripts/copilot.mjs";
+import { HOOK_FILES } from "../scripts/hook-configs.mjs";
 import { COPIED_FILES, COPILOT_SCRIPTS, SCRIPTS, copyProblems, writeCopies } from "../scripts/copies.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const ADAPTER = path.join(ROOT, "plugins", "koalafix-copilot", "hooks", "copilot.mjs");
+const ADAPTER = path.join(ROOT, "plugins", "koalafix-copilot", "hooks", "scripts", "copilot.mjs");
 const temps = [];
 after(() => {
   for (const dir of temps) {
@@ -58,19 +59,33 @@ test("every Copilot event maps to a copied script that exists", () => {
   }
 });
 
+test("every Copilot hook runs the copied adapter, which runs the scripts as Copilot's own client (KFIX-1027)", () => {
+  const config = HOOK_FILES["plugins/koalafix-copilot/com.github.copilot/hooks/hooks.json"];
+  const commands = Object.values(config.hooks).flat().map((hook) => hook.command);
+  assert.equal(commands.length, 4);
+  for (const command of commands) {
+    assert.match(command, /^node "\$\{PLUGIN_ROOT\}\/hooks\/scripts\/copilot\.mjs" [A-Za-z]+$/);
+  }
+  assert.equal(fs.existsSync(path.join(ROOT, "plugins", "koalafix-copilot", "hooks", "copilot.mjs")), false);
+  // As `claude-code`, a Copilot session end was owed Claude Code's `claude -p --resume` pass in the repo's folder.
+  assert.equal(CLIENT, "copilot");
+  const sessionEnd = fs.readFileSync(path.join(ROOT, COPILOT_SCRIPTS, "session-end.mjs"), "utf8");
+  assert.match(sessionEnd, /args\.client === "claude-code" && endPassDue\(/);
+});
+
 test("the script gets only the fields it reads, and runs as a --user hook", async () => {
   const scripts = fakeScripts(ECHO);
   const raw = JSON.stringify({ ...SESSION, prompt: "fix the login bug", transformedPrompt: "<current_datetime>x</current_datetime>\n\nfix the login bug" });
-  const { stdout } = await runAdapter({ event: "userPromptTransformed", raw, scripts });
+  const { stdout } = await runCopilotHook({ event: "userPromptTransformed", raw, scripts });
   const out = JSON.parse(stdout);
   const echoed = JSON.parse(out.modifiedTransformedPrompt.split("\n\n").at(-1));
-  assert.deepEqual(echoed.argv, ["--user", "--client", CLIENT]);
+  assert.deepEqual(echoed.argv, ["--client", CLIENT, "--user"]);
   assert.deepEqual(echoed.input, { sessionId: "s-1", cwd: SESSION.cwd, prompt: "fix the login bug" });
 });
 
 test("sessionStart prints the brief as additionalContext, the field Copilot reads", async () => {
   const scripts = fakeScripts(`process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: ${JSON.stringify(BRIEF)} } }));`);
-  const { stdout } = await runAdapter({ event: "sessionStart", raw: JSON.stringify({ ...SESSION, source: "new" }), scripts });
+  const { stdout } = await runCopilotHook({ event: "sessionStart", raw: JSON.stringify({ ...SESSION, source: "new" }), scripts });
   assert.deepEqual(JSON.parse(stdout), { additionalContext: BRIEF });
 });
 
@@ -117,30 +132,30 @@ test("slimInput never passes the model-facing prompt to a script", () => {
 
 test("a script that crashes or prints junk gives {} and its stderr", async () => {
   const scripts = fakeScripts(`process.stderr.write("koalafix: prompt hook skipped: server down\\n"); process.stdout.write("garbage"); process.exit(1);`);
-  const result = await runAdapter({ event: "userPromptTransformed", raw: JSON.stringify({ ...SESSION, prompt: "p", transformedPrompt: "p" }), scripts });
+  const result = await runCopilotHook({ event: "userPromptTransformed", raw: JSON.stringify({ ...SESSION, prompt: "p", transformedPrompt: "p" }), scripts });
   assert.equal(result.stdout, "{}\n");
   assert.match(result.stderr, /server down/);
 });
 
 test("a script that hangs is stopped and gives {}", async () => {
   const scripts = fakeScripts("setInterval(() => {}, 1000);");
-  const result = await runAdapter({ event: "sessionStart", raw: JSON.stringify(SESSION), scripts, ms: 300 });
+  const result = await runCopilotHook({ event: "sessionStart", raw: JSON.stringify(SESSION), scripts, ms: 300 });
   assert.equal(result.stdout, "{}\n");
   assert.match(result.stderr, /took longer than 300 ms/);
 });
 
 test("a missing script, an unknown event or input that is not an object gives {}", async () => {
   const empty = tempDir();
-  assert.equal((await runAdapter({ event: "sessionStart", raw: JSON.stringify(SESSION), scripts: empty })).stdout, "{}\n");
-  assert.equal((await runAdapter({ event: "userPromptSubmitted", raw: JSON.stringify(SESSION), scripts: empty })).stdout, "{}\n");
-  assert.equal((await runAdapter({ event: "toString", raw: JSON.stringify(SESSION), scripts: empty })).stdout, "{}\n");
-  assert.equal((await runAdapter({ event: "sessionStart", raw: "[]", scripts: empty })).stdout, "{}\n");
-  assert.equal((await runAdapter({ event: "sessionStart", raw: "", scripts: empty })).stdout, "{}\n");
+  assert.equal((await runCopilotHook({ event: "sessionStart", raw: JSON.stringify(SESSION), scripts: empty })).stdout, "{}\n");
+  assert.equal((await runCopilotHook({ event: "userPromptSubmitted", raw: JSON.stringify(SESSION), scripts: empty })).stdout, "{}\n");
+  assert.equal((await runCopilotHook({ event: "toString", raw: JSON.stringify(SESSION), scripts: empty })).stdout, "{}\n");
+  assert.equal((await runCopilotHook({ event: "sessionStart", raw: "[]", scripts: empty })).stdout, "{}\n");
+  assert.equal((await runCopilotHook({ event: "sessionStart", raw: "", scripts: empty })).stdout, "{}\n");
 });
 
 test("a Node that cannot start gives {}", async () => {
   const scripts = fakeScripts(ECHO);
-  const result = await runAdapter({ event: "sessionStart", raw: JSON.stringify(SESSION), scripts, execPath: path.join(scripts, "no-such-node") });
+  const result = await runCopilotHook({ event: "sessionStart", raw: JSON.stringify(SESSION), scripts, execPath: path.join(scripts, "no-such-node") });
   assert.equal(result.stdout, "{}\n");
   assert.match(result.stderr, /copilot hook skipped/);
 });
@@ -186,7 +201,7 @@ function fakeRepo() {
   for (const original of Object.values(COPIED_FILES)) {
     put(original, `original ${original}\n`);
   }
-  for (const own of ["plugin.json", "mcp.json", "README.md", "com.github.copilot/hooks/hooks.json", "hooks/copilot.mjs"]) {
+  for (const own of ["plugin.json", "mcp.json", "README.md", "com.github.copilot/hooks/hooks.json"]) {
     put(`plugins/koalafix-copilot/${own}`, "{}\n");
   }
   return root;
