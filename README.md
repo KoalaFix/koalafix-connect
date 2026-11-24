@@ -1,26 +1,44 @@
 # KoalaFix Connect
 
-KoalaFix is shared team memory and work items for software teams that build with AI agents, hosted by
-KoalaFix as an MCP server. Before an agent acts it recalls what the team already knows, with who checked each
-fact and when, and it marks work as started and done so every session and every teammate can pick up where the
-last one left off.
+KoalaFix is shared team memory for Claude Code, Cursor and Codex, and it stops AI coding agents editing the same
+files. It is a hosted MCP server, `https://mcp.koalafix.com/mcp`, that gives every AI agent on a team one shared
+memory: decisions from everyone's sessions flow into one team memory that keeps itself current. Before its first
+edit, an agent checks in with the repo and files it is about to work on, and it is told when a teammate's agent
+already holds them. There is nothing to install beyond the AI tools your team already uses.
+
+KoalaFix is for small teams of 2 to 10 people where everyone runs AI coding agents daily. It is free for up to 10
+people, and Premium is US$15 a seat a month.
+
+KoalaFix is opening soon. Website: https://www.koalafix.com. Docs: https://www.koalafix.com/docs. Join the
+waitlist: https://www.koalafix.com/waitlist. Made by KoalaFix Pty Ltd in Melbourne.
 
 This repository holds the files that connect your AI client to KoalaFix: plugin and extension manifests, the
 MCP server address and the agent instructions. The KoalaFix service itself is not in this repository.
+
+## Connect in one line
+
+For Claude Code (2.1.292 or later), from a shell:
+
+```
+claude plugin install koalafix --marketplace KoalaFix/koalafix-connect
+```
+
+KoalaFix is invite-only while the waitlist is open, so sign up from your team's invite link first. Every other
+client, and older Claude Code releases, are under [Install](#install).
 
 ## What these files do
 
 - Point your client at one remote MCP server, `https://mcp.koalafix.com/mcp` (streamable HTTP). That is the only network
   destination.
-- Give the agent the KoalaFix session routine: a skill in Claude and Codex, an always-applied rule in
-  Cursor, and a context file in Gemini CLI.
+- Give the agent the KoalaFix session routine: a skill in Claude and Codex, and an always-applied rule in
+  Cursor.
 - The `koalafix` plugin contains no scripts, no hooks, no tokens and no telemetry, and runs nothing on your machine.
 - For Claude there is one plugin, `koalafix`: the server and the skill, and nothing run on your machine. It is the
   plugin the Claude directory lists, it works in chat, Cowork and Claude Code alike, and it has no hooks.
 - KoalaFix is invite-only for now: open the invite link your team sent and sign up from it before you add any plugin,
   or the sign-in works and the server then turns your assistant away. No invite yet? Ask your team's admin.
 - Claude gets no hooks. In Codex and Cursor, the optional `koalafix-auto` plugin adds hooks beside `koalafix`; the
-  `koalafix-copilot` plugin (GitHub Copilot) and the Gemini CLI extension carry their own. Those hooks run Node.js
+  `koalafix-copilot` plugin (GitHub Copilot) carries its own. Those hooks run Node.js
   scripts on your machine; see [Session hooks](#session-hooks).
 - Kalibrate is the name of the engine behind KoalaFix, which is why some files and settings here say kalibrate
   (`~/.kalibrate/`, the `KALIBRATE_*` variables).
@@ -79,9 +97,9 @@ rules folder takes `.md`, which is what the Claude directory accepts).
 
 ### Gemini CLI
 
-```
-gemini extensions install https://github.com/KoalaFix/koalafix-connect
-```
+KoalaFix does not support Gemini CLI for now. This repository still carries a Gemini CLI extension
+(`gemini-extension.json`, `GEMINI.md`, `hooks/hooks.json`), but it has not yet passed a run against KoalaFix's
+production service.
 
 ### Antigravity CLI
 
@@ -123,10 +141,9 @@ keeps the token; no file here holds one. To sign in ahead of time:
 
 - Claude Code: run `/mcp`, pick `koalafix`, choose to authenticate.
 - Codex: run `codex mcp login koalafix`.
-- Gemini CLI: run `/mcp auth koalafix`.
 - Copilot CLI: run `/mcp auth koalafix` in a session.
 
-The session hooks (the Codex and Cursor `koalafix-auto` plugin, the Gemini CLI extension and the Copilot plugin) sign
+The session hooks (the Codex and Cursor `koalafix-auto` plugin and the Copilot plugin) sign
 in once on their own: at the first session start the agent shows you a link and a code to approve in the browser. See
 [Session hooks](#session-hooks).
 
@@ -134,7 +151,7 @@ in once on their own: at the first session start the agent shows you a link and 
   Claude Code, open `/mcp`, pick `koalafix` and authenticate again; where hooks are installed, run `koalafix login`, or
   delete `~/.kalibrate/credentials.json` and start a new session to sign in again.
 
-Codex, Cursor and Gemini CLI sign their KoalaFix tools in on their own, as above.
+Codex and Cursor sign their KoalaFix tools in on their own, as above.
 
 ## The routine your agent follows
 
@@ -151,7 +168,7 @@ Codex, Cursor and Gemini CLI sign their KoalaFix tools in on their own, as above
 
 ## Session hooks
 
-With only the `koalafix` plugin, the agent uses team memory when it decides to. In Codex, Cursor, Gemini CLI and
+With only the `koalafix` plugin, the agent uses team memory when it decides to. In Codex, Cursor and
 GitHub Copilot, hooks make it automatic (Claude has none):
 
 - **Session start:** the team's brief goes in front of the session: facts, the team's current decisions (the ones
@@ -172,7 +189,7 @@ GitHub Copilot, hooks make it automatic (Claude has none):
   your messages, never anything personal or secret, and nothing at all when nothing was decided. Your teammates'
   agents then recall those decisions. Only in a session you are in: a `claude -p` run, an Agent SDK program, a
   background session, `codex exec` (Codex is held only in its terminal app, IDE extension and desktop app) and every
-  Cursor and Gemini CLI session (their scripted runs look the same to a hook) are never held, so a script gets its own
+  Cursor session (its scripted runs look the same to a hook) are never held, so a script gets its own
   answer (`KALIBRATE_CAPTURE=always` turns it on there, `off` turns it off everywhere). In several spaces with none
   named after the project, your agent asks you which one once, and the hook remembers your pick for that folder on
   your machine. The hook also writes what is open for you to the client's hook log (not the chat).
@@ -184,14 +201,14 @@ GitHub Copilot, hooks make it automatic (Claude has none):
 |---|---|---|
 | Codex (CLI and desktop) | `koalafix-auto` plugin, after you trust it in `/hooks` | SessionStart, UserPromptSubmit, Stop, SessionEnd |
 | Cursor | `koalafix-auto` plugin (its hooks run from `${CURSOR_PLUGIN_ROOT}`) | sessionStart, beforeSubmitPrompt, stop, sessionEnd |
-| Gemini CLI | this extension | SessionStart, BeforeAgent, AfterAgent, SessionEnd |
+| Gemini CLI (not supported for now: not yet verified on production) | this repository's Gemini CLI extension | SessionStart, BeforeAgent, AfterAgent, SessionEnd |
 | GitHub Copilot: CLI, the Copilot app, VS Code (hooks in preview there) | `koalafix-copilot` plugin, through `hooks/copilot.mjs` | sessionStart, userPromptTransformed (the recall goes after your prompt in what the model receives), agentStop, sessionEnd |
 | Copilot cloud agent, JetBrains, Visual Studio | none: the cloud agent runs only repository hook files and has no credential; JetBrains and Visual Studio run no Copilot hooks | the server's instructions; the cloud agent connects with a token |
 | Claude (claude.ai, desktop and mobile chat, Cowork, Claude Code), ChatGPT | none: the `koalafix` plugin runs nothing on your machine | the server's instructions and the skill carry the routine |
 | OpenCode | none from here: `koalafix init` writes its compaction plugin and an AGENTS.md block | |
 
 **What they run and send.** The hooks are Node.js scripts (Node 22 or later) in
-`plugins/koalafix-auto/hooks/scripts/` (Codex, Cursor and Gemini CLI run them from there, and the Copilot plugin carries an
+`plugins/koalafix-auto/hooks/scripts/` (Codex and Cursor run them from there, and the Copilot plugin carries an
 exact copy), the same scripts `koalafix init` installs, copied from KoalaFix's source by
 `scripts/sync-hooks.mjs`. They read your own KoalaFix credential from `~/.kalibrate/credentials.json` (written by the
 browser sign-in or `koalafix login`) and send it only to the exact server it was issued for. They send that server:
@@ -232,13 +249,12 @@ a note cannot pretend to be KoalaFix. Shared memory is a way in for prompt injec
 **They never get in your way.** Every hook gives up silently on any problem: no Node, no credential, a server that is
 down or slow. A prompt waits at most the hook's 1.5 second budget, and no hook blocks a prompt or a tool call. The
 exceptions are small: now and then the stop hook asks the agent to save the session's team decisions (one more
-step for the agent, which saves nothing when nothing was decided; in Gemini CLI the agent also gives its last answer
-again, since Gemini CLI replaces an answer a hook holds), and when the server refuses the work lease the hooks
+step for the agent, which saves nothing when nothing was decided), and when the server refuses the work lease the hooks
 started, it asks the agent once to start it. In a project that has its own `koalafix init` install, the plugin's hooks do nothing, so nothing runs
 twice.
 
 **Node.js.** The Codex binary and Cursor do not bring Node with them. Without Node the
-hooks do nothing for KoalaFix (a client may show a one-line hook error) and the skill, rule or context file still tells the agent the routine. On macOS and Linux, Codex
+hooks do nothing for KoalaFix (a client may show a one-line hook error) and the skill or rule still tells the agent the routine. On macOS and Linux, Codex
 starts the hooks through `run.sh`, which also finds a Node from Homebrew, nvm, Volta, fnm, asdf or mise that a
 desktop app's short PATH misses.
 
@@ -262,14 +278,14 @@ KoalaFix service. See [LICENSE](LICENSE).
 | `.agents/plugins/marketplace.json` | Codex marketplace |
 | `.cursor-plugin/marketplace.json` | Cursor marketplace |
 | `plugins/koalafix/` | The one Claude plugin, which Codex and Cursor list too: Claude, Codex and Cursor manifests, `.mcp.json`, skill, Cursor rule, icons. No hooks, so directories that refuse hooks can list it |
-| `plugins/koalafix-auto/` | The session hooks for Codex and Cursor: one hook file per client and the shared scripts the Gemini CLI extension and the Copilot plugin use too. Not a Claude plugin: Claude has no hooks |
-| `hooks/hooks.json` | The Gemini CLI extension's session hooks (they run the scripts in `plugins/koalafix-auto/`) |
+| `plugins/koalafix-auto/` | The session hooks for Codex and Cursor: one hook file per client and the shared scripts the Copilot plugin and the Gemini CLI extension (not yet verified on production) use too. Not a Claude plugin: Claude has no hooks |
+| `hooks/hooks.json` | The Gemini CLI extension's session hooks (they run the scripts in `plugins/koalafix-auto/`); not yet verified on production |
 | `.antigravity-plugin/plugin.json`, `mcp_config.json`, `hooks.json`, `hooks/antigravity.mjs` | The Antigravity CLI plugin (the repository root): its manifest, the server by `serverUrl`, the session hooks and the adapter that runs the scripts in `plugins/koalafix-auto/` |
 | `.github/plugin/marketplace.json` | GitHub Copilot marketplace (Copilot reads it before `.claude-plugin/`) |
 | `plugins/koalafix-copilot/` | The GitHub Copilot plugin (Agent Plugins 1.0): `plugin.json`, `mcp.json`, the skill, `com.github.copilot/hooks/hooks.json`, the adapter `hooks/copilot.mjs` and an exact copy of the hook scripts |
 | `scripts/sync-hooks.mjs`, `scripts/hook-configs.mjs`, `scripts/copies.mjs` | Copy the hook scripts from KoalaFix's source, write the five hook files from one table, and keep the Copilot plugin's copies (scripts, skill, licence) identical to their originals |
 | `tests/` | `node --test tests/copilot.test.mjs` and `tests/antigravity.test.mjs`: the Copilot and Antigravity adapters |
 | `scripts/check.mjs` | The checks before a change ships: hook files in step, scripts unchanged since copied, no secrets, listed plugin hook-free |
-| `gemini-extension.json`, `GEMINI.md` | Gemini CLI extension. Both must stay at the repository root: the Gemini CLI extensions gallery only indexes a root `gemini-extension.json` (plus the GitHub topic `gemini-cli-extension`). |
+| `gemini-extension.json`, `GEMINI.md` | Gemini CLI extension, not yet verified on production, so KoalaFix does not support Gemini CLI for now. Both must stay at the repository root: the Gemini CLI extensions gallery only indexes a root `gemini-extension.json` (plus the GitHub topic `gemini-cli-extension`). |
 | `server.json` | Official MCP Registry entry |
 | `ICONS.md` | Every icon the listings need |
