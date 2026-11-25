@@ -55,15 +55,31 @@ use. Both sign-ins use the same KoalaFix account.
 
 1. Make a personal token on the dashboard's Account page: https://mcp.koalafix.com, then Account, then Personal
    tokens.
-2. Turn off the plugin's server and add one that sends the token. The plugin's `koalafix` entry would win over one
-   of the same name, so the token server gets its own name:
+2. Turn off the plugin's server and add one for the token. The plugin's `koalafix` entry would win over one of the
+   same name, so the token server gets its own name. These commands carry no token:
 
    ```
    copilot mcp disable koalafix
-   copilot mcp add --transport http --header "Authorization: Bearer <your token>" koalafix-token https://mcp.koalafix.com/mcp
+   copilot mcp add --transport http koalafix-token https://mcp.koalafix.com/mcp
    ```
 
-   This writes the token into `~/.copilot/mcp-config.json`, never into a project.
+3. Open `~/.copilot/mcp-config.json` (`%USERPROFILE%\.copilot\mcp-config.json` on Windows) in a text editor, find
+   the `koalafix-token` entry and add a `headers` line after its `url`, pasting your token in place of
+   `<your token>`:
+
+   ```json
+   "url": "https://mcp.koalafix.com/mcp",
+   "headers": { "Authorization": "Bearer <your token>" }
+   ```
+
+   Save the file. `copilot mcp get koalafix-token` shows the header (masked) when it is right. The token lives only in
+   that file, never in a project. On macOS and Linux, keep the file readable by you alone:
+   `chmod 600 ~/.copilot/mcp-config.json`.
+
+Do not type or paste the token into a command, such as `copilot mcp add --header "Authorization: Bearer ..."`: a
+command line stays in your shell history and shows in the process list while it runs, where other users and
+programs on the machine can read it. If you already did, clear that line from your shell history, revoke the token
+under Personal tokens on the Account page and make a new one.
 
 ## What the hooks run and send
 
